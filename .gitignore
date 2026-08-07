@@ -1,0 +1,24 @@
+# 本机 Python 虚拟环境
+.venv_m3/
+.venv/
+venv/
+
+# Python 缓存与测试缓存
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# PyInstaller 临时构建目录
+build/
+build_*/
+dist_build*/
+runtime_*/
+
+# 编辑器与系统临时文件
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+*.tmp
+*.log
