@@ -788,11 +788,21 @@ class DeskPetApp:
                     restore_backup(source, {"settings.json": self.settings_store.path, "pet_state.json": self.growth.path, "deskpet.db": self.database.path})
                     self.running = False
                     message = "数据已恢复，程序将关闭；请重新启动桌宠"
-                elif command == "refresh_weather":
-                    if not bool(self.settings.get("weather_enabled", False)):
-                        raise ValueError("请先启用天气并应用设置")
-                    self.weather_client.refresh(str(self.settings.get("weather_city", "")))
-                    message = "正在刷新天气……"
+                elif command == "apply_weather":
+                    enabled = bool(item.get("enabled", False))
+                    city = str(item.get("city", "")).strip()[:80]
+                    if enabled and not city:
+                        raise ValueError("启用天气时请填写城市")
+                    self.settings["weather_enabled"] = enabled
+                    self.settings["weather_city"] = city
+                    self._mark_settings_dirty()
+                    self._save_settings()
+                    if enabled:
+                        self.weather_client.refresh(city)
+                        message = "正在刷新天气……"
+                    else:
+                        self.weather_summary = "天气未启用"
+                        message = "天气已关闭"
                 elif command == "ai_chat":
                     message_text = str(item.get("message", "")).strip()
                     if not bool(self.settings.get("ai_enabled", False)):

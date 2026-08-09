@@ -348,9 +348,11 @@ class ControlPanelBridge:
         data_options.pack(fill="x", pady=(10, 0))
         ttk.Button(data_options, text="备份全部数据", command=lambda: send("backup_data", destination=filedialog.asksaveasfilename(defaultextension=".zip", filetypes=(("桌宠备份", "*.zip"),)))).pack(side="left", padx=4)
         ttk.Button(data_options, text="恢复备份", command=lambda: send("restore_data", source=filedialog.askopenfilename(filetypes=(("桌宠备份", "*.zip"),)))).pack(side="left", padx=4)
-        ttk.Checkbutton(environment_options, text="启用天气", variable=weather_enabled).grid(row=0, column=0, sticky="w")
+        weather_text = tk.StringVar(value="天气未启用")
+        ttk.Checkbutton(environment_options, text="启用天气", variable=weather_enabled, command=lambda: send("apply_weather", enabled=weather_enabled.get(), city=weather_city.get())).grid(row=0, column=0, sticky="w")
         ttk.Entry(environment_options, textvariable=weather_city, width=16).grid(row=0, column=1, padx=6)
-        ttk.Button(environment_options, text="刷新天气", command=lambda: send("refresh_weather")).grid(row=0, column=2, padx=4)
+        ttk.Button(environment_options, text="刷新天气", command=lambda: send("apply_weather", enabled=weather_enabled.get(), city=weather_city.get())).grid(row=0, column=2, padx=4)
+        ttk.Label(environment_options, textvariable=weather_text, style="Sub.TLabel").grid(row=0, column=3, sticky="w")
         ttk.Label(environment_options, text="全屏时").grid(row=1, column=0, sticky="w", pady=(8, 0))
         ttk.Combobox(environment_options, textvariable=fullscreen_policy, values=("hide", "quiet", "ignore"), state="readonly", width=12).grid(row=1, column=1, sticky="w", pady=(8, 0))
         ttk.Label(environment_options, text="hide=隐藏，quiet=安静，ignore=忽略", style="Sub.TLabel").grid(row=1, column=2, sticky="w", pady=(8, 0))
@@ -467,6 +469,8 @@ class ControlPanelBridge:
                     f"CPU {format_percent(monitor.get('cpu_percent'))}   内存 {format_percent(monitor.get('memory_percent'))}   "
                     f"电量 {battery_text}   网络 {network_text}   温度 {monitor.get('temperature', '系统未提供')}"
                 )
+            if "weather" in snapshot:
+                weather_text.set(str(snapshot["weather"]))
             if "ai_history" in snapshot:
                 ai_history.configure(state="normal")
                 ai_history.delete("1.0", "end")
