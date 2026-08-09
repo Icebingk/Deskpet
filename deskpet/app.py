@@ -1161,12 +1161,14 @@ class DeskPetApp:
         hud_activity_changed = self.hud.set_activity_active(
             bool(self.active_activity and now < float(self.active_activity["ends_at"]))
         )
+        mouse_position = pygame.mouse.get_pos()
         hud_changed = self.hud.update(
-            pygame.mouse.get_pos(),
+            mouse_position,
             self.sprite_rect,
             visible_horizontal=visible_horizontal,
             now=now,
             force_hide=self.window.dragging or self.window.click_through,
+            character_hover=self._hit_character(mouse_position),
         )
         if hud_changed or hud_activity_changed:
             self.needs_redraw = True

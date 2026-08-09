@@ -63,6 +63,29 @@ class HudEdgeLayoutTests(unittest.TestCase):
             self.hud.action_at(self.hud.button_rects["stop_activity"].center),
             "stop_activity",
         )
+    def test_hud_is_triggered_only_by_character_hover(self) -> None:
+        self.assertFalse(
+            self.hud.update((0, 0), self.character, now=10.0, character_hover=False)
+        )
+        self.assertFalse(self.hud.visible)
+
+        self.hud.update((0, 0), self.character, now=10.1, character_hover=True)
+        self.assertTrue(self.hud.visible)
+
+        self.hud.update((0, 0), self.character, now=10.5, character_hover=False)
+        self.assertFalse(self.hud.visible)
+
+    def test_hud_stays_visible_while_moving_to_an_action_button(self) -> None:
+        self.hud.update((0, 0), self.character, now=10.0, character_hover=True)
+        self.hud._layout(self.character)
+        self.hud.update(
+            self.hud.button_rects["food_menu"].center,
+            self.character,
+            now=10.1,
+            character_hover=False,
+        )
+        self.assertTrue(self.hud.visible)
+
     def test_tool_menu_returns_builtin_tool_action(self) -> None:
         self.hud.visible = True
         self.hud.open_menu = "tool"

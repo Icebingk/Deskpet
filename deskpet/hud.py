@@ -11,7 +11,9 @@ from .growth import ACTIVITY_DURATION_OPTIONS, CARE_OPTIONS, PetGrowth
 
 
 class PetHud:
-    """鼠标靠近角色时显示紧凑状态与常用照顾操作。"""
+    """鼠标悬停角色时显示紧凑状态与常用照顾操作。"""
+
+    PANEL_GRACE_SECONDS = 0.28
 
     MAIN_BUTTONS = (
         ("food_menu", "吃饭 ›", (255, 230, 184)),
@@ -187,17 +189,24 @@ class PetHud:
         visible_horizontal: tuple[int, int] | None = None,
         now: float | None = None,
         force_hide: bool = False,
+        character_hover: bool | None = None,
     ) -> bool:
         now = now if now is not None else time.monotonic()
         previous = self.visible
         previous_hover = self.hovered_action
         self._layout(character_rect, visible_horizontal)
         self.last_mouse = mouse_position
-        inside = character_rect.inflate(18, 18).collidepoint(mouse_position)
-        inside = inside or self.card_rect.collidepoint(mouse_position)
-        inside = inside or any(rect.collidepoint(mouse_position) for rect in self.button_rects.values())
-        if inside:
-            self.visible_until = now + 0.65
+        over_character = (
+            character_rect.collidepoint(mouse_position)
+            if character_hover is None
+            else bool(character_hover)
+        )
+        over_controls = previous and (
+            self.card_rect.collidepoint(mouse_position)
+            or any(rect.collidepoint(mouse_position) for rect in self.button_rects.values())
+        )
+        if over_character or over_controls:
+            self.visible_until = now + self.PANEL_GRACE_SECONDS
         self.visible = not force_hide and now < self.visible_until
         if not self.visible:
             self.open_menu = None
@@ -228,7 +237,7 @@ class PetHud:
                 self.open_menu = menu_actions[action]
                 self.pending_action = None
                 self.pending_category = None
-                self.visible_until = time.monotonic() + 2.5
+                self.visible_until = time.monotonic() + self.PANEL_GRACE_SECONDS
                 return "__menu__"
             if action == "menu_back":
                 if self.open_menu == "duration" and self.pending_category:
@@ -237,7 +246,7 @@ class PetHud:
                     self.open_menu = None
                 self.pending_action = None
                 self.pending_category = None
-                self.visible_until = time.monotonic() + 1.0
+                self.visible_until = time.monotonic() + self.PANEL_GRACE_SECONDS
                 return "__menu__"
             if self.open_menu == "duration" and action.startswith("duration:"):
                 minutes = int(action.partition(":")[2])
@@ -250,7 +259,7 @@ class PetHud:
                 self.pending_action = action
                 self.pending_category = self.open_menu
                 self.open_menu = "duration"
-                self.visible_until = time.monotonic() + 2.5
+                self.visible_until = time.monotonic() + self.PANEL_GRACE_SECONDS
                 return "__menu__"
             self.open_menu = None
             self.pending_action = None
