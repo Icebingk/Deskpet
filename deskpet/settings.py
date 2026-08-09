@@ -39,6 +39,8 @@ DEFAULT_SETTINGS: dict[str, object] = {
     "ai_enabled": False,
     "ai_base_url": "",
     "ai_model": "",
+    "weather_enabled": False,
+    "weather_city": "",
 }
 
 
@@ -88,6 +90,7 @@ class SettingsStore:
             "reminder_water",
             "reminder_eyes",
             "ai_enabled",
+            "weather_enabled",
         ):
             if isinstance(data.get(key), bool):
                 settings[key] = data[key]
@@ -122,7 +125,7 @@ class SettingsStore:
             else:
                 settings[key] = default
 
-        for key in ("ai_base_url", "ai_model"):
+        for key in ("ai_base_url", "ai_model", "weather_city"):
             value = data.get(key)
             if isinstance(value, str):
                 settings[key] = value.strip()[:500]
@@ -180,6 +183,8 @@ class SettingsStore:
             "ai_enabled": bool(settings.get("ai_enabled", False)),
             "ai_base_url": str(settings.get("ai_base_url", "")).strip()[:500],
             "ai_model": str(settings.get("ai_model", "")).strip()[:200],
+            "weather_enabled": bool(settings.get("weather_enabled", False)),
+            "weather_city": str(settings.get("weather_city", "")).strip()[:80],
         }
         temporary = self.path.with_suffix(".tmp")
         try:

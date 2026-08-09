@@ -55,6 +55,9 @@ class DeskPetDatabase:
             );
             CREATE INDEX IF NOT EXISTS idx_notes_due
                 ON notes(completed, deleted_at, due_at);
+
+            CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL, content TEXT NOT NULL, created_at REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS memories (memory_key TEXT PRIMARY KEY, memory_value TEXT NOT NULL, updated_at REAL NOT NULL);
             """
         )
         note_columns = {
@@ -248,5 +251,18 @@ class DeskPetDatabase:
         destination.write_text("\n".join(lines), encoding="utf-8")
         return len(notes)
 
+
+    def add_chat_message(self, role: str, content: str) -> None:
+        self.connection.execute("INSERT INTO chat_messages(role, content, created_at) VALUES (?, ?, ?)", (role[:20], content.strip()[:4000], time.time()))
+        self.connection.commit()
+
+    def recent_chat_messages(self, limit: int = 12) -> list[dict[str, Any]]:
+        rows = self.connection.execute("SELECT role, content, created_at FROM chat_messages ORDER BY id DESC LIMIT ?", (max(1, min(100, int(limit))),)).fetchall()
+        return [dict(row) for row in reversed(rows)]
+
+    def clear_ai_data(self) -> None:
+        self.connection.execute("DELETE FROM chat_messages")
+        self.connection.execute("DELETE FROM memories")
+        self.connection.commit()
     def close(self) -> None:
         self.connection.close()

@@ -51,6 +51,7 @@ from .constants import (
     WINDOW_WIDTH,
 )
 from .control_panel import ControlPanelBridge
+from .data_tools import create_backup, restore_backup
 from .dialogue import SpeechBubble
 from .ai_chat import OptionalAiClient
 from .environment import local_environment
@@ -66,6 +67,7 @@ from .sound import play_alarm, play_interaction
 from .startup import is_enabled as autostart_is_enabled
 from .startup import set_enabled as set_autostart
 from .system_monitor import SystemMonitor
+from .weather import WeatherClient
 from .window_win32 import GlobalHotkeys, Win32Window
 
 
@@ -155,7 +157,10 @@ class DeskPetApp:
         self.system_monitor = SystemMonitor()
         self.control_panel = ControlPanelBridge()
         self.ai_client = OptionalAiClient()
-        self.ai_history: list[str] = []
+        self.weather_client = WeatherClient()
+        self.weather_summary = "天气未启用"
+        self.next_weather_refresh = 0.0
+        self.ai_history = [("你：" if item["role"] == "user" else "小狗：") + str(item["content"]) for item in self.database.recent_chat_messages()]
         self.ai_pending: dict[int, str] = {}
         self.settings["autostart"] = autostart_is_enabled()
 
@@ -163,6 +168,8 @@ class DeskPetApp:
         self.running = True
         self.exit_animation_pending = False
         self.exit_animation_deadline = 0.0
+        self.fullscreen_hidden = False
+        self.fullscreen_quiet = False
         self.paused = False
         self.needs_redraw = True
         self.settings_dirty = False
@@ -515,6 +522,7 @@ class DeskPetApp:
                 self.panel_note_search, include_deleted=self.panel_show_deleted
             ),
             "environment": local_environment().label,
+            "weather": self.weather_summary,
             "ai_history": chr(10).join(self.ai_history[-12:]),
         }
         if message:
@@ -561,6 +569,13 @@ class DeskPetApp:
                 self.ai_api_key = submitted_key
             if not self.ai_api_key:
                 raise ValueError("启用 AI 时必须填写 API 密钥")
+        weather_enabled = bool(values.get("weather_enabled", self.settings.get("weather_enabled", False)))
+        weather_city = str(values.get("weather_city", self.settings.get("weather_city", ""))).strip()[:80]
+        fullscreen_policy = str(values.get("fullscreen_policy", self.settings.get("fullscreen_policy", "quiet")))
+        if fullscreen_policy not in ("hide", "quiet", "ignore"):
+            raise ValueError("全屏策略无效")
+        if weather_enabled and not weather_city:
+            raise ValueError("启用天气时请填写城市")
         scale = float(values.get("scale", self.character_scale))
         speed = float(values.get("animation_speed", self.animation_speed))
         bubble_speed = self._integer(values.get("bubble_speed", 18), 10, 30, "气泡速度")
@@ -638,6 +653,9 @@ class DeskPetApp:
                 "ai_enabled": ai_enabled,
                 "ai_base_url": ai_base_url[:500],
                 "ai_model": ai_model[:200],
+                "weather_enabled": weather_enabled,
+                "weather_city": weather_city,
+                "fullscreen_policy": fullscreen_policy,
             }
         )
         self.growth.update()
@@ -757,6 +775,24 @@ class DeskPetApp:
                     if destination:
                         count = self.database.export_notes(Path(destination))
                         message = f"已导出 {count} 条便签"
+                elif command == "backup_data":
+                    destination = Path(str(item.get("destination", "")).strip())
+                    if not str(destination): raise ValueError("请选择备份位置")
+                    self.database.connection.commit()
+                    create_backup(destination, {"settings.json": self.settings_store.path, "pet_state.json": self.growth.path, "deskpet.db": self.database.path})
+                    message = "本地数据已备份"
+                elif command == "restore_data":
+                    source = Path(str(item.get("source", "")).strip())
+                    if not source.exists(): raise ValueError("备份文件不存在")
+                    self.database.close()
+                    restore_backup(source, {"settings.json": self.settings_store.path, "pet_state.json": self.growth.path, "deskpet.db": self.database.path})
+                    self.running = False
+                    message = "数据已恢复，程序将关闭；请重新启动桌宠"
+                elif command == "refresh_weather":
+                    if not bool(self.settings.get("weather_enabled", False)):
+                        raise ValueError("请先启用天气并应用设置")
+                    self.weather_client.refresh(str(self.settings.get("weather_city", "")))
+                    message = "正在刷新天气……"
                 elif command == "ai_chat":
                     message_text = str(item.get("message", "")).strip()
                     if not bool(self.settings.get("ai_enabled", False)):
@@ -770,7 +806,12 @@ class DeskPetApp:
                     })
                     self.ai_pending[request_id] = message_text
                     self.ai_history.append("你：" + message_text[:300])
+                    self.database.add_chat_message("user", message_text)
                     message = "正在向 AI 发送消息……"
+                elif command == "clear_ai_data":
+                    self.database.clear_ai_data()
+                    self.ai_history.clear()
+                    message = "AI 对话和记忆已清除"
                 elif command == "apply_settings":
                     values = item.get("values")
                     if not isinstance(values, dict):
@@ -985,10 +1026,18 @@ class DeskPetApp:
         return None
 
     def _update_m3_services(self, now: float) -> None:
+        if bool(self.settings.get("weather_enabled", False)) and now >= self.next_weather_refresh:
+            city = str(self.settings.get("weather_city", "")).strip()
+            if city:
+                self.weather_client.refresh(city)
+                self.next_weather_refresh = now + 1800
+        for weather in self.weather_client.poll():
+            self.weather_summary = weather.error or weather.summary
         for reply in self.ai_client.poll():
             self.ai_pending.pop(reply.request_id, None)
             text = reply.error or reply.text
             self.ai_history.append("小狗：" + text[:800])
+            self.database.add_chat_message("assistant", text)
             self.bubble.show(text, seconds=7.0)
             self.needs_redraw = True
         events = self.reminders.tick(self.settings)
@@ -1024,6 +1073,15 @@ class DeskPetApp:
     def _update(self, elapsed: float) -> None:
         now = time.monotonic()
         self._handle_hotkeys()
+        fullscreen = self.window.foreground_window_is_fullscreen()
+        policy = str(self.settings.get("fullscreen_policy", "quiet"))
+        self.fullscreen_quiet = fullscreen and policy == "quiet"
+        if fullscreen and policy == "hide" and self.window.is_visible:
+            self.window.hide()
+            self.fullscreen_hidden = True
+        elif self.fullscreen_hidden and not fullscreen:
+            self.window.show()
+            self.fullscreen_hidden = False
         self.control_panel.pump()
         self._handle_panel_commands()
         window_x, window_y = self.window.position()
@@ -1082,7 +1140,7 @@ class DeskPetApp:
         if physics_event:
             self._handle_physics_event(physics_event)
 
-        if not self.paused and self.window.is_visible:
+        if not (self.paused or self.fullscreen_quiet) and self.window.is_visible:
             finished = self.current_clip.update(elapsed * self.animation_speed)
             if self.exit_animation_pending:
                 if (

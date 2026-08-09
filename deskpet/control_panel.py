@@ -251,6 +251,7 @@ class ControlPanelBridge:
         ai_send.pack(fill="x")
         ttk.Entry(ai_send, textvariable=ai_question).pack(side="left", fill="x", expand=True, padx=(0, 6))
         ttk.Button(ai_send, text="发送", command=lambda: (send("ai_chat", message=ai_question.get()), ai_question.set(""))).pack(side="right")
+        ttk.Button(ai_send, text="清除聊天记录", command=lambda: send("clear_ai_data")).pack(side="right", padx=(0, 6))
 
         # 外观与行为
         scale_value = tk.DoubleVar(value=1.0)
@@ -338,6 +339,21 @@ class ControlPanelBridge:
         click_through = tk.BooleanVar(value=False)
         autostart = tk.BooleanVar(value=False)
         system_options = ttk.LabelFrame(system, text="窗口与启动", padding=12)
+        weather_enabled = tk.BooleanVar(value=False)
+        weather_city = tk.StringVar()
+        fullscreen_policy = tk.StringVar(value="quiet")
+        environment_options = ttk.LabelFrame(system, text="环境与全屏", padding=12)
+        environment_options.pack(fill="x", pady=(10, 0))
+        data_options = ttk.LabelFrame(system, text="数据管理", padding=12)
+        data_options.pack(fill="x", pady=(10, 0))
+        ttk.Button(data_options, text="备份全部数据", command=lambda: send("backup_data", destination=filedialog.asksaveasfilename(defaultextension=".zip", filetypes=(("桌宠备份", "*.zip"),)))).pack(side="left", padx=4)
+        ttk.Button(data_options, text="恢复备份", command=lambda: send("restore_data", source=filedialog.askopenfilename(filetypes=(("桌宠备份", "*.zip"),)))).pack(side="left", padx=4)
+        ttk.Checkbutton(environment_options, text="启用天气", variable=weather_enabled).grid(row=0, column=0, sticky="w")
+        ttk.Entry(environment_options, textvariable=weather_city, width=16).grid(row=0, column=1, padx=6)
+        ttk.Button(environment_options, text="刷新天气", command=lambda: send("refresh_weather")).grid(row=0, column=2, padx=4)
+        ttk.Label(environment_options, text="全屏时").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Combobox(environment_options, textvariable=fullscreen_policy, values=("hide", "quiet", "ignore"), state="readonly", width=12).grid(row=1, column=1, sticky="w", pady=(8, 0))
+        ttk.Label(environment_options, text="hide=隐藏，quiet=安静，ignore=忽略", style="Sub.TLabel").grid(row=1, column=2, sticky="w", pady=(8, 0))
         system_options.pack(fill="x")
         ttk.Checkbutton(system_options, text="强力置顶", variable=topmost).pack(side="left", padx=6)
         ttk.Checkbutton(system_options, text="鼠标穿透", variable=click_through).pack(side="left", padx=6)
@@ -379,6 +395,9 @@ class ControlPanelBridge:
                     "ai_base_url": ai_base_url.get(),
                     "ai_model": ai_model.get(),
                     "ai_api_key": ai_api_key.get(),
+                    "weather_enabled": weather_enabled.get(),
+                    "weather_city": weather_city.get(),
+                    "fullscreen_policy": fullscreen_policy.get(),
                 },
             ),
         ).pack(side="right")
@@ -427,6 +446,9 @@ class ControlPanelBridge:
                 ai_enabled.set(bool(settings.get("ai_enabled", False)))
                 ai_base_url.set(str(settings.get("ai_base_url", "")))
                 ai_model.set(str(settings.get("ai_model", "")))
+                weather_enabled.set(bool(settings.get("weather_enabled", False)))
+                weather_city.set(str(settings.get("weather_city", "")))
+                fullscreen_policy.set(str(settings.get("fullscreen_policy", "quiet")))
                 custom_values = [
                     f"{item.get('name', '')}｜{item.get('target', '')}"
                     for item in settings.get("custom_tools", [])

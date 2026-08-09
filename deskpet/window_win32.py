@@ -504,6 +504,20 @@ class Win32Window:
             self.user32.ReleaseCapture()
         return was_dragging and not moved, moved
 
+    def foreground_window_is_fullscreen(self) -> bool:
+        hwnd = self.user32.GetForegroundWindow()
+        if not hwnd or hwnd == self.hwnd:
+            return False
+        rect = self._window_rect(hwnd)
+        if rect is None:
+            return False
+        work = self.work_area_for(rect.left, rect.top)
+        return (
+            rect.left <= work.left + 2
+            and rect.top <= work.top + 2
+            and rect.right >= work.right - 2
+            and rect.bottom >= work.bottom - 2
+        )
     def hide(self) -> None:
         self.user32.ShowWindow(self.hwnd, SW_HIDE)
         self.is_visible = False
