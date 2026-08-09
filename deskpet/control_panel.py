@@ -118,11 +118,13 @@ class ControlPanelBridge:
         notes = ttk.Frame(notebook, padding=14)
         appearance = ttk.Frame(notebook, padding=14)
         system = ttk.Frame(notebook, padding=14)
+        ai = ttk.Frame(notebook, padding=14)
         notebook.add(home, text="首页")
         notebook.add(timing, text="计时")
         notebook.add(notes, text="便签")
         notebook.add(appearance, text="外观与行为")
         notebook.add(system, text="系统与工具")
+        notebook.add(ai, text="AI（可选）")
 
         def send(command: str, **values: Any) -> None:
             self.commands.put({"command": command, **values})
@@ -225,6 +227,30 @@ class ControlPanelBridge:
         ttk.Button(note_buttons, text="延期一天", command=lambda: send("postpone_note", note_id=selected_note())).pack(side="left", padx=3)
         ttk.Button(note_buttons, text="删除/恢复", command=lambda: send("delete_or_restore_note", note_id=selected_note(), deleted=show_deleted.get())).pack(side="left", padx=3)
         ttk.Button(note_buttons, text="导出文本", command=lambda: send("export_notes", destination=filedialog.asksaveasfilename(title="导出便签", defaultextension=".txt", filetypes=(("文本文件", "*.txt"),)))).pack(side="right", padx=3)
+
+        # AI（可选）：不开启或未填写接口时不会发出任何网络请求。
+        ai_enabled = tk.BooleanVar(value=False)
+        ai_base_url = tk.StringVar()
+        ai_model = tk.StringVar()
+        ai_api_key = tk.StringVar()
+        ai_config = ttk.LabelFrame(ai, text="兼容 OpenAI 的接口配置", padding=12)
+        ai_config.pack(fill="x", pady=(4, 10))
+        ttk.Checkbutton(ai_config, text="启用 AI 功能", variable=ai_enabled).grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(ai_config, text="接口地址").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        ttk.Entry(ai_config, textvariable=ai_base_url, width=48).grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(10, 0))
+        ttk.Label(ai_config, text="模型名").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Entry(ai_config, textvariable=ai_model, width=48).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(ai_config, text="API 密钥").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        ttk.Entry(ai_config, textvariable=ai_api_key, show="*", width=48).grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(ai_config, text="密钥只保留在本次运行内存中，不写入设置文件。未启用时桌宠完全离线运行。", style="Sub.TLabel", wraplength=500).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        ai_config.columnconfigure(1, weight=1)
+        ai_question = tk.StringVar()
+        ai_history = tk.Text(ai, height=10, wrap="word", state="disabled")
+        ai_history.pack(fill="both", expand=True, pady=(4, 8))
+        ai_send = ttk.Frame(ai)
+        ai_send.pack(fill="x")
+        ttk.Entry(ai_send, textvariable=ai_question).pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ttk.Button(ai_send, text="发送", command=lambda: (send("ai_chat", message=ai_question.get()), ai_question.set(""))).pack(side="right")
 
         # 外观与行为
         scale_value = tk.DoubleVar(value=1.0)
@@ -349,6 +375,10 @@ class ControlPanelBridge:
                     "topmost": topmost.get(),
                     "click_through": click_through.get(),
                     "autostart": autostart.get(),
+                    "ai_enabled": ai_enabled.get(),
+                    "ai_base_url": ai_base_url.get(),
+                    "ai_model": ai_model.get(),
+                    "ai_api_key": ai_api_key.get(),
                 },
             ),
         ).pack(side="right")
@@ -394,6 +424,9 @@ class ControlPanelBridge:
                 topmost.set(bool(settings.get("topmost", True)))
                 click_through.set(bool(settings.get("click_through", False)))
                 autostart.set(bool(settings.get("autostart", False)))
+                ai_enabled.set(bool(settings.get("ai_enabled", False)))
+                ai_base_url.set(str(settings.get("ai_base_url", "")))
+                ai_model.set(str(settings.get("ai_model", "")))
                 custom_values = [
                     f"{item.get('name', '')}｜{item.get('target', '')}"
                     for item in settings.get("custom_tools", [])
@@ -412,6 +445,11 @@ class ControlPanelBridge:
                     f"CPU {format_percent(monitor.get('cpu_percent'))}   内存 {format_percent(monitor.get('memory_percent'))}   "
                     f"电量 {battery_text}   网络 {network_text}   温度 {monitor.get('temperature', '系统未提供')}"
                 )
+            if "ai_history" in snapshot:
+                ai_history.configure(state="normal")
+                ai_history.delete("1.0", "end")
+                ai_history.insert("end", str(snapshot["ai_history"]))
+                ai_history.configure(state="disabled")
             if "timers" in snapshot:
                 timer_tree.delete(*timer_tree.get_children())
                 for timer in snapshot["timers"]:

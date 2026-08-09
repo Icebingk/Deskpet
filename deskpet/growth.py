@@ -248,7 +248,7 @@ class PetGrowth:
             - 0.45 * self.natural_decay_multiplier * hours
         )
         if self.sleeping:
-            self.state["energy"] = self._clamp(self.value("energy") + 12.0 * hours)
+            self.state["energy"] = self._clamp(self.value("energy") + 24.0 * hours)
         else:
             self.state["energy"] = self._clamp(
                 self.value("energy")
@@ -399,17 +399,17 @@ class PetGrowth:
         if action == "feed_meal":
             if self.value("fullness") >= 92:
                 return CareResult(False, "已经吃得很饱啦，晚点再喂我吧～")
-            self._add(fullness=35, energy=12, health=3, mood=2)
+            self._add(fullness=35, energy=28, health=3, mood=2)
             level_up = self._add_xp(4)
             animations = ("088", "147")
-            message = "营养餐吃完啦！饱腹+35，体力+12，健康+3，心情+2"
+            message = "营养餐吃完啦！饱腹+35，体力+28，健康+3，心情+2"
         elif action == "feed_icecream":
             if self.value("fullness") >= 97:
                 return CareResult(False, "肚子装不下冰淇淋啦～")
-            self._add(fullness=10, energy=4, mood=14, health=-2, cleanliness=-3)
+            self._add(fullness=10, energy=10, mood=14, health=-2, cleanliness=-3)
             level_up = self._add_xp(2)
             animations = ("162", "162", "162")
-            message = "冰淇淋真开心！饱腹+10，体力+4，心情+14，健康-2，清洁-3"
+            message = "冰淇淋真开心！饱腹+10，体力+10，心情+14，健康-2，清洁-3"
         elif action == "game_pet":
             energy_cost = scaled(1)
             if self.value("energy") < energy_cost:

@@ -40,7 +40,7 @@ class GrowthDecayTests(unittest.TestCase):
             growth.state["sleeping"] = True
             growth.state["energy"] = 40.0
             growth._apply_elapsed(3600)
-            self.assertAlmostEqual(growth.value("energy"), 52.0)
+            self.assertAlmostEqual(growth.value("energy"), 64.0)
 
     def test_food_restores_energy_and_exercise_uses_default_duration(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -49,13 +49,13 @@ class GrowthDecayTests(unittest.TestCase):
             growth.state["last_update"] = now
             feed = growth.perform("feed_meal", now=now)
             self.assertTrue(feed.accepted)
-            self.assertAlmostEqual(growth.value("energy"), 92.0)
+            self.assertAlmostEqual(growth.value("energy"), 100.0)
 
             growth.state["cooldowns"] = {}
             exercise = growth.perform("exercise_warmup", now=now)
             self.assertTrue(exercise.accepted)
             self.assertEqual(exercise.duration_minutes, 15)
-            self.assertAlmostEqual(growth.value("energy"), 86.0)
+            self.assertAlmostEqual(growth.value("energy"), 94.0)
 
     def test_selected_work_and_game_duration_scales_results(self) -> None:
         with tempfile.TemporaryDirectory() as root:

@@ -36,6 +36,9 @@ DEFAULT_SETTINGS: dict[str, object] = {
     "passive_energy_decay_per_hour": 0.2,
     "exercise_energy_multiplier": 2.0,
     "custom_tools": [],
+    "ai_enabled": False,
+    "ai_base_url": "",
+    "ai_model": "",
 }
 
 
@@ -84,6 +87,7 @@ class SettingsStore:
             "reminder_sedentary",
             "reminder_water",
             "reminder_eyes",
+            "ai_enabled",
         ):
             if isinstance(data.get(key), bool):
                 settings[key] = data[key]
@@ -118,6 +122,10 @@ class SettingsStore:
             else:
                 settings[key] = default
 
+        for key in ("ai_base_url", "ai_model"):
+            value = data.get(key)
+            if isinstance(value, str):
+                settings[key] = value.strip()[:500]
         policy = data.get("fullscreen_policy")
         if policy in ("hide", "quiet", "ignore"):
             settings["fullscreen_policy"] = policy
@@ -169,6 +177,9 @@ class SettingsStore:
                 2,
             ),
             "custom_tools": list(settings.get("custom_tools", []))[:12],
+            "ai_enabled": bool(settings.get("ai_enabled", False)),
+            "ai_base_url": str(settings.get("ai_base_url", "")).strip()[:500],
+            "ai_model": str(settings.get("ai_model", "")).strip()[:200],
         }
         temporary = self.path.with_suffix(".tmp")
         try:

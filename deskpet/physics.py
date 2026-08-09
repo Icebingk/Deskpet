@@ -37,6 +37,9 @@ class DesktopPhysics:
 
     GRAVITY_ACCELERATION = 1800.0
     MAX_FALL_SPEED = 1600.0
+    MAX_THROW_SPEED_X = 1200.0
+    MAX_THROW_SPEED_Y = 1200.0
+    AIR_DRAG_PER_SECOND = 2.6
     EDGE_SNAP_DISTANCE = 32
     SUPPORT_POLL_SECONDS = 0.20
 
@@ -64,7 +67,9 @@ class DesktopPhysics:
         self.edge_snap = edge_snap
         self.sprite_width = sprite_width
         self.falling = False
+        self.velocity_x = 0.0
         self.velocity_y = 0.0
+        self.fall_x = 0.0
         self.fall_y = 0.0
         self.fall_started_y = 0.0
         self.target: SurfaceTarget | None = None
@@ -100,6 +105,7 @@ class DesktopPhysics:
         """Suspend falling, support following and edge hiding during roaming."""
         self.note_activity()
         self.falling = False
+        self.velocity_x = 0.0
         self.velocity_y = 0.0
         self.target = None
         self.support = None
@@ -109,6 +115,7 @@ class DesktopPhysics:
 
     def end_external_motion(self, *, snap_to_edge: bool = True) -> None:
         self.falling = False
+        self.velocity_x = 0.0
         self.velocity_y = 0.0
         self.target = None
         self.support = None
@@ -175,24 +182,33 @@ class DesktopPhysics:
             return min(candidates, key=lambda item: item.top)
         return SurfaceTarget(work.bottom, work.left, work.right, None)
 
-    def release(self) -> PhysicsEvent:
-        """拖动结束后开始下落；关闭重力时只执行边缘吸附。"""
+    def release(
+        self, throw_velocity: tuple[float, float] | None = None
+    ) -> PhysicsEvent:
+        """拖动结束后按甩动速度开始抛物线；关闭重力时只执行边缘吸附。"""
         x, y = self.window.position()
         self.support = None
+        throw_x, throw_y = throw_velocity or (0.0, 0.0)
+        throw_x = max(-self.MAX_THROW_SPEED_X, min(self.MAX_THROW_SPEED_X, throw_x))
+        throw_y = max(-self.MAX_THROW_SPEED_Y, min(self.MAX_THROW_SPEED_Y, throw_y))
         if not self.gravity or not self.window_collision:
             self.falling = False
+            self.velocity_x = 0.0
+            self.velocity_y = 0.0
             self.snap_to_edge()
             return PhysicsEvent("landed", "004", 0.0)
 
         self.target = self._target_below(x, y)
         target_y = self.target.top - CHARACTER_FLOOR
-        if target_y <= y + 1:
+        if target_y <= y + 1 and throw_y >= -40.0:
             self.window.move(x, target_y)
             self._finish_landing(self.target)
             return PhysicsEvent("landed", "004", 0.0)
 
         self.falling = True
-        self.velocity_y = 0.0
+        self.velocity_x = throw_x
+        self.velocity_y = throw_y
+        self.fall_x = float(x)
         self.fall_y = float(y)
         self.fall_started_y = float(y)
         return PhysicsEvent("falling")
@@ -214,6 +230,7 @@ class DesktopPhysics:
 
     def _finish_landing(self, target: SurfaceTarget) -> None:
         self.falling = False
+        self.velocity_x = 0.0
         self.velocity_y = 0.0
         self.target = None
         self.support = target if target.hwnd is not None else None
@@ -238,25 +255,31 @@ class DesktopPhysics:
         if self.window.dragging:
             return None
         if self.falling:
-            x, current_y = self.window.position()
-            self._refresh_fall_target(x, current_y)
-            assert self.target is not None
-            target_y = float(self.target.top - CHARACTER_FLOOR)
+            step = min(elapsed, 0.08)
+            self.velocity_x *= max(0.0, 1.0 - self.AIR_DRAG_PER_SECOND * step)
+            self.fall_x += self.velocity_x * step
             self.velocity_y = min(
                 self.MAX_FALL_SPEED,
-                self.velocity_y + self.GRAVITY_ACCELERATION * min(elapsed, 0.08),
+                self.velocity_y + self.GRAVITY_ACCELERATION * step,
             )
-            self.fall_y += self.velocity_y * min(elapsed, 0.08)
+            self.fall_y += self.velocity_y * step
+            next_x, _ = self.window.clamp_to_visible_screen(
+                round(self.fall_x), round(self.fall_y)
+            )
+            self.fall_x = float(next_x)
+            self._refresh_fall_target(next_x, round(self.fall_y))
+            assert self.target is not None
+            target_y = float(self.target.top - CHARACTER_FLOOR)
             if self.fall_y >= target_y:
                 self.fall_y = target_y
-                self.window.move(x, round(self.fall_y))
+                self.window.move(next_x, round(self.fall_y))
                 distance = max(0.0, self.fall_y - self.fall_started_y)
                 landed_target = self.target
                 self._finish_landing(landed_target)
                 return PhysicsEvent(
                     "landed", self._landing_action(distance), distance
                 )
-            self.window.move(x, round(self.fall_y))
+            self.window.move(next_x, round(self.fall_y))
             return None
 
         if self.support is not None and time.monotonic() >= self.next_support_poll:

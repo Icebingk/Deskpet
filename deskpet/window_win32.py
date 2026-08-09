@@ -238,6 +238,9 @@ class Win32Window:
         self.drag_moved = False
         self.drag_offset = (0, 0)
         self.press_point = (0, 0)
+        self.drag_velocity = (0.0, 0.0)
+        self.drag_sample_position = (0, 0)
+        self.drag_sample_time = 0.0
         self.last_topmost_assertion = 0.0
         self._configure_api()
         self._configure_window(initial_position)
@@ -460,6 +463,9 @@ class Win32Window:
         self.drag_moved = False
         self.press_point = (point.x, point.y)
         self.drag_offset = (point.x - rect.left, point.y - rect.top)
+        self.drag_velocity = (0.0, 0.0)
+        self.drag_sample_position = (rect.left, rect.top)
+        self.drag_sample_time = time.monotonic()
         self.user32.SetCapture(self.hwnd)
 
     def update_drag(self) -> None:
@@ -471,7 +477,23 @@ class Win32Window:
         if moved_x > 6 or moved_y > 6:
             self.drag_moved = True
         if self.drag_moved:
-            self.move(point.x - self.drag_offset[0], point.y - self.drag_offset[1])
+            new_position = (
+                point.x - self.drag_offset[0],
+                point.y - self.drag_offset[1],
+            )
+            now = time.monotonic()
+            elapsed = now - self.drag_sample_time
+            if elapsed > 0.002:
+                raw_x = (new_position[0] - self.drag_sample_position[0]) / elapsed
+                raw_y = (new_position[1] - self.drag_sample_position[1]) / elapsed
+                # A small smoothing window avoids erratic throws from mouse jitter.
+                self.drag_velocity = (
+                    self.drag_velocity[0] * 0.35 + raw_x * 0.65,
+                    self.drag_velocity[1] * 0.35 + raw_y * 0.65,
+                )
+                self.drag_sample_position = new_position
+                self.drag_sample_time = now
+            self.move(*new_position)
 
     def finish_drag(self) -> tuple[bool, bool]:
         was_dragging = self.dragging

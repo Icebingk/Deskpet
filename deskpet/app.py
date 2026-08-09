@@ -52,6 +52,8 @@ from .constants import (
 )
 from .control_panel import ControlPanelBridge
 from .dialogue import SpeechBubble
+from .ai_chat import OptionalAiClient
+from .environment import local_environment
 from .growth import TIMED_CARE_ACTIONS, PetGrowth
 from .hud import PetHud
 from .persistence import DeskPetDatabase
@@ -99,6 +101,7 @@ class DeskPetApp:
         self.health_reminders = bool(self.settings["health_reminders"])
         self.animation_speed = float(self.settings["animation_speed"])
         self.bubble_speed = int(self.settings["bubble_speed"])
+        self.ai_api_key = os.environ.get("DESKPET_AI_API_KEY", "").strip()
 
         pygame.init()
         pygame.font.init()
@@ -151,10 +154,15 @@ class DeskPetApp:
         self.reminders = ReminderManager(self.database, self.settings)
         self.system_monitor = SystemMonitor()
         self.control_panel = ControlPanelBridge()
+        self.ai_client = OptionalAiClient()
+        self.ai_history: list[str] = []
+        self.ai_pending: dict[int, str] = {}
         self.settings["autostart"] = autostart_is_enabled()
 
         self.clock = pygame.time.Clock()
         self.running = True
+        self.exit_animation_pending = False
+        self.exit_animation_deadline = 0.0
         self.paused = False
         self.needs_redraw = True
         self.settings_dirty = False
@@ -506,6 +514,8 @@ class DeskPetApp:
             "notes": self.database.list_notes(
                 self.panel_note_search, include_deleted=self.panel_show_deleted
             ),
+            "environment": local_environment().label,
+            "ai_history": chr(10).join(self.ai_history[-12:]),
         }
         if message:
             snapshot["message"] = message
@@ -538,6 +548,19 @@ class DeskPetApp:
         return parsed
 
     def _apply_panel_settings(self, values: dict[str, object]) -> str:
+        ai_enabled = bool(values.get("ai_enabled", self.settings.get("ai_enabled", False)))
+        ai_base_url = str(values.get("ai_base_url", self.settings.get("ai_base_url", ""))).strip()
+        ai_model = str(values.get("ai_model", self.settings.get("ai_model", ""))).strip()
+        submitted_key = str(values.get("ai_api_key", "")).strip()
+        if ai_enabled:
+            if not ai_base_url.startswith(("https://", "http://")):
+                raise ValueError("启用 AI 时，接口地址必须以 http:// 或 https:// 开头")
+            if not ai_model:
+                raise ValueError("启用 AI 时必须填写模型名")
+            if submitted_key:
+                self.ai_api_key = submitted_key
+            if not self.ai_api_key:
+                raise ValueError("启用 AI 时必须填写 API 密钥")
         scale = float(values.get("scale", self.character_scale))
         speed = float(values.get("animation_speed", self.animation_speed))
         bubble_speed = self._integer(values.get("bubble_speed", 18), 10, 30, "气泡速度")
@@ -610,6 +633,13 @@ class DeskPetApp:
         ):
             self.settings[key] = bool(values.get(key, self.settings.get(key, True)))
         self.settings.update(intervals)
+        self.settings.update(
+            {
+                "ai_enabled": ai_enabled,
+                "ai_base_url": ai_base_url[:500],
+                "ai_model": ai_model[:200],
+            }
+        )
         self.growth.update()
         self.settings.update(growth_settings)
         self.growth.configure(
@@ -727,6 +757,20 @@ class DeskPetApp:
                     if destination:
                         count = self.database.export_notes(Path(destination))
                         message = f"已导出 {count} 条便签"
+                elif command == "ai_chat":
+                    message_text = str(item.get("message", "")).strip()
+                    if not bool(self.settings.get("ai_enabled", False)):
+                        raise ValueError("请先在 AI（可选）页启用并应用配置")
+                    if not message_text:
+                        raise ValueError("请输入想对小狗说的话")
+                    request_id = self.ai_client.submit(message_text, {
+                        "base_url": str(self.settings["ai_base_url"]),
+                        "model": str(self.settings["ai_model"]),
+                        "api_key": self.ai_api_key,
+                    })
+                    self.ai_pending[request_id] = message_text
+                    self.ai_history.append("你：" + message_text[:300])
+                    message = "正在向 AI 发送消息……"
                 elif command == "apply_settings":
                     values = item.get("values")
                     if not isinstance(values, dict):
@@ -785,6 +829,18 @@ class DeskPetApp:
         self._mark_settings_dirty()
         self.needs_redraw = True
 
+    def _request_exit(self) -> None:
+        if self.exit_animation_pending:
+            return
+        self.exit_animation_pending = True
+        self.exit_animation_deadline = time.monotonic() + 4.0
+        self.action_queue.clear()
+        self.active_activity = None
+        self.hud.visible = False
+        self._apply_behavior(self.behavior.play_external("103", "exit"))
+        self.bubble.show("我先躲起来啦，下次见～", seconds=3.0)
+        self.needs_redraw = True
+
     def _handle_menu(self) -> None:
         self.pending_single_click = False
         command = self.window.popup_menu(
@@ -834,7 +890,7 @@ class DeskPetApp:
         elif command == MENU_HIDE:
             self.window.hide()
         elif command == MENU_EXIT:
-            self.running = False
+            self._request_exit()
         self.needs_redraw = True
 
     def _handle_character_click(self) -> None:
@@ -878,7 +934,7 @@ class DeskPetApp:
                         self._handle_character_click()
                     elif moved:
                         self.pending_single_click = False
-                        physics_event = self.physics.release()
+                        physics_event = self.physics.release(self.window.drag_velocity)
                         self._handle_physics_event(physics_event)
                     self.pressed_on_character = False
             elif event.type == pygame.MOUSEWHEEL:
@@ -929,6 +985,12 @@ class DeskPetApp:
         return None
 
     def _update_m3_services(self, now: float) -> None:
+        for reply in self.ai_client.poll():
+            self.ai_pending.pop(reply.request_id, None)
+            text = reply.error or reply.text
+            self.ai_history.append("小狗：" + text[:800])
+            self.bubble.show(text, seconds=7.0)
+            self.needs_redraw = True
         events = self.reminders.tick(self.settings)
         if events:
             message = "；".join(event.message.rstrip("。！～") for event in events) + "！"
@@ -1022,6 +1084,15 @@ class DeskPetApp:
 
         if not self.paused and self.window.is_visible:
             finished = self.current_clip.update(elapsed * self.animation_speed)
+            if self.exit_animation_pending:
+                if (
+                    finished
+                    or self.current_clip.loop_completed
+                    or now >= self.exit_animation_deadline
+                ):
+                    self.running = False
+                self.needs_redraw = self.needs_redraw or self.current_clip.frame_changed
+                return
             if self.current_mode == "activity":
                 activity = self.active_activity
                 if not activity or now >= float(activity["ends_at"]):
