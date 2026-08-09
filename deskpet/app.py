@@ -51,7 +51,7 @@ from .constants import (
     WINDOW_WIDTH,
 )
 from .control_panel import ControlPanelBridge
-from .data_tools import create_backup, restore_backup
+from .data_tools import create_backup, create_restore_point, restore_backup
 from .dialogue import SpeechBubble
 from .ai_chat import OptionalAiClient
 from .environment import local_environment
@@ -791,10 +791,15 @@ class DeskPetApp:
                 elif command == "restore_data":
                     source = Path(str(item.get("source", "")).strip())
                     if not source.exists(): raise ValueError("备份文件不存在")
+                    self.database.connection.commit()
+                    restore_point = create_restore_point(
+                        self.settings_store.path.parent / "backups",
+                        {"settings.json": self.settings_store.path, "pet_state.json": self.growth.path, "deskpet.db": self.database.path},
+                    )
                     self.database.close()
                     restore_backup(source, {"settings.json": self.settings_store.path, "pet_state.json": self.growth.path, "deskpet.db": self.database.path})
                     self.running = False
-                    message = "数据已恢复，程序将关闭；请重新启动桌宠"
+                    message = f"数据已恢复，已创建恢复前备份：{restore_point.name}"
                 elif command == "apply_weather":
                     enabled = bool(item.get("enabled", False))
                     city = str(item.get("city", "")).strip()[:80]

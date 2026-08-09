@@ -67,6 +67,12 @@ python deskpet2d.py
 
 也可以在依赖安装完成后双击 `start_2d.bat`。
 
+## 第五阶段验收与发布
+
+- 运行完整自动化验收：`Y:\Deskpet\.venv_m3\Scripts\python.exe -m unittest discover -s tests -q`。
+- 关闭桌宠后执行 `powershell -ExecutionPolicy Bypass -File tools\build_release.ps1`，生成正式版 `dist\线条小狗桌宠.exe`。
+- 自动化测试覆盖设置损坏回退、数据库旧结构迁移、备份恢复和异常 ZIP 拒绝。Windows 10 真机兼容与连续 30 分钟性能仍需在目标设备实测。
+
 ## GIF 动作素材目录
 
 - 双击 `catalog\gif_action_catalog.html`：搜索、筛选并直接播放全部 GIF。

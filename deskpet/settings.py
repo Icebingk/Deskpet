@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import time
 from pathlib import Path
 
 from .constants import DEFAULT_SCALE, MAX_SCALE, MIN_SCALE
@@ -55,13 +57,29 @@ class SettingsStore:
             local_data = Path(os.environ.get("LOCALAPPDATA") or Path.home())
             self.path = local_data / "LineDogDeskPet" / "settings.json"
 
+    def _quarantine_broken(self) -> None:
+        """Keep a copy of an invalid settings file before using defaults."""
+        if not self.path.is_file():
+            return
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        target = self.path.with_name(f"{self.path.stem}.broken-{stamp}{self.path.suffix}")
+        try:
+            shutil.copy2(self.path, target)
+        except OSError:
+            pass
+
+
     def load(self) -> dict[str, object]:
         settings = dict(DEFAULT_SETTINGS)
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return settings
         except (OSError, ValueError, TypeError):
+            self._quarantine_broken()
             return settings
         if not isinstance(data, dict):
+            self._quarantine_broken()
             return settings
 
         position = data.get("position")
