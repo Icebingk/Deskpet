@@ -77,7 +77,8 @@ class GifClip:
         self.loop_completed = False
         self.frame_changed = True
 
-    def update(self, elapsed: float) -> bool:
+    def update(self, elapsed: float, *, force_loop: bool = False) -> bool:
+        """推进动画；定时活动可临时强制循环，不改变素材原始循环设置。"""
         self.loop_completed = False
         self.frame_changed = False
         if self.finished:
@@ -87,7 +88,7 @@ class GifClip:
             self.frame_elapsed -= self.durations[self.frame_index]
             self.frame_changed = True
             if self.frame_index == len(self.frames) - 1:
-                if self.looping:
+                if self.looping or force_loop:
                     self.frame_index = 0
                     self.loop_completed = True
                 else:

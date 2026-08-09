@@ -1153,7 +1153,11 @@ class DeskPetApp:
         # “全屏静默”只抑制打扰行为，不能暂停 GIF 的逐帧更新；否则最大化窗口
         # 被误判为全屏时，角色会停在某一帧，看起来像动画卡住。
         if not self.paused and self.window.is_visible:
-            finished = self.current_clip.update(elapsed * self.animation_speed)
+            # 定时运动、工作和游戏必须持续播放到用户选择的结束时间。
+            finished = self.current_clip.update(
+                elapsed * self.animation_speed,
+                force_loop=self.current_mode == "activity",
+            )
             if self.exit_animation_pending:
                 if (
                     finished
