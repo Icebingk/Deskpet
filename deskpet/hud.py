@@ -108,16 +108,6 @@ class PetHud:
         if visible_right <= visible_left:
             visible_left, visible_right = 0, WINDOW_WIDTH
 
-        card_width, card_height = 174, 68
-        card_min_left = visible_left + 8
-        card_max_left = max(card_min_left, visible_right - card_width - 8)
-        card_left = max(
-            card_min_left,
-            min(card_max_left, character_rect.centerx - card_width // 2),
-        )
-        card_top = max(8, character_rect.top - card_height - 9)
-        self.card_rect = pygame.Rect(card_left, card_top, card_width, card_height)
-
         button_width, button_height, gap = 68, 22, 3
         buttons = self._active_buttons()
         total_height = len(buttons) * button_height + (len(buttons) - 1) * gap
@@ -143,6 +133,37 @@ class PetHud:
             for index, (action, _label, _color) in enumerate(buttons)
         }
 
+        # Determine the button position first, then reserve that column for it.
+        # The status card never covers a visible action button.
+        card_width, card_height = 174, 68
+        card_min_left = visible_left + 8
+        card_max_left = max(card_min_left, visible_right - card_width - 8)
+        preferred_left = max(
+            card_min_left,
+            min(card_max_left, character_rect.centerx - card_width // 2),
+        )
+        preferred_top = max(8, character_rect.top - card_height - 9)
+        button_column = pygame.Rect(button_left, button_top, button_width, total_height)
+
+        candidate_lefts = (
+            preferred_left,
+            button_column.left - card_width - 8,
+            button_column.right + 8,
+        )
+        card_rect: pygame.Rect | None = None
+        for candidate_left in candidate_lefts:
+            if not card_min_left <= candidate_left <= card_max_left:
+                continue
+            candidate = pygame.Rect(candidate_left, preferred_top, card_width, card_height)
+            if not candidate.colliderect(button_column):
+                card_rect = candidate
+                break
+
+        if card_rect is None:
+            # On narrow displays, lift the card above the complete button column.
+            card_top = max(8, min(preferred_top, button_column.top - card_height - 8))
+            card_rect = pygame.Rect(preferred_left, card_top, card_width, card_height)
+        self.card_rect = card_rect
     def update(
         self,
         mouse_position: tuple[int, int],
