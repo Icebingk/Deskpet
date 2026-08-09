@@ -16,9 +16,10 @@ class GifClip:
 
     MAX_DECODED_SIZE = 240
 
-    def __init__(self, path: Path, looping: bool) -> None:
+    def __init__(self, path: Path, looping: bool, loop_start: int = 0) -> None:
         self.path = path
         self.looping = looping
+        self.loop_start = max(0, int(loop_start))
         self.frames: list[pygame.Surface] = []
         self.durations: list[float] = []
         self.frame_index = 0
@@ -48,6 +49,7 @@ class GifClip:
 
         if not boxes:
             raise ValueError(f"动画没有可见内容：{self.path}")
+        self.loop_start = min(self.loop_start, len(rgba_frames) - 1)
         left = max(0, min(box[0] for box in boxes) - 4)
         top = max(0, min(box[1] for box in boxes) - 4)
         right = min(rgba_frames[0].width, max(box[2] for box in boxes) + 4)
@@ -89,7 +91,7 @@ class GifClip:
             self.frame_changed = True
             if self.frame_index == len(self.frames) - 1:
                 if self.looping or force_loop:
-                    self.frame_index = 0
+                    self.frame_index = self.loop_start
                     self.loop_completed = True
                 else:
                     self.finished = True
@@ -134,7 +136,9 @@ class GifLibrary:
         if not definition:
             raise KeyError(f"动作 Manifest 中不存在：{action}")
         clip = GifClip(
-            resource_path(str(definition["file"])), bool(definition.get("loop", False))
+            resource_path(str(definition["file"])),
+            bool(definition.get("loop", False)),
+            int(definition.get("loop_start", 0)),
         )
         self.loaded[action] = clip
         while len(self.loaded) > self.max_loaded:

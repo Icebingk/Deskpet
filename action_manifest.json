@@ -53,7 +53,7 @@
     "143": {"file": "pet_assets/core/143.gif", "loop": true, "role": "scene_idle"},
     "147": {"file": "pet_assets/core/147.gif", "loop": false, "role": "care_feed"},
     "148": {"file": "pet_assets/core/148.gif", "loop": true, "role": "pomodoro_work"},
-    "149": {"file": "pet_assets/core/149.gif", "loop": true, "role": "scene_idle"},
+    "149": {"file": "pet_assets/core/149.gif", "loop": true, "loop_start": 8, "role": "scene_idle"},
     "150": {"file": "pet_assets/core/150.gif", "loop": false, "role": "care_treat"},
     "158": {"file": "pet_assets/core/158.gif", "loop": false, "role": "care_clean"},
     "160": {"file": "pet_assets/core/160.gif", "loop": true, "role": "sleep"},
