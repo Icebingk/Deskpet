@@ -27,6 +27,26 @@ class ActivityResumeTests(unittest.TestCase):
         self.assertTrue(app._resume_interrupted_state(now))
         app.behavior.play_external.assert_called_once_with("149", "activity", now)
 
+    def test_activity_settlement_uses_actual_elapsed_seconds(self) -> None:
+        app = self.make_app()
+        started_at = time.monotonic() - 180.0
+        app.active_activity = {
+            "action": "game_controller",
+            "duration_minutes": 30,
+            "started_at": started_at,
+            "ends_at": started_at + 1800.0,
+        }
+        result = SimpleNamespace(level_up=None, message="已结算")
+        app.growth.complete_timed_activity = Mock(return_value=result)
+
+        settled = app._settle_active_activity(started_at + 180.0)
+
+        self.assertIs(settled, result)
+        self.assertIsNone(app.active_activity)
+        app.growth.complete_timed_activity.assert_called_once_with(
+            "game_controller", 30, 180.0
+        )
+
     def test_sleep_resumes_after_drag(self) -> None:
         app = self.make_app()
         app.growth.sleeping = True

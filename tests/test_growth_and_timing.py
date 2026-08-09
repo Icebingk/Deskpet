@@ -55,6 +55,12 @@ class GrowthDecayTests(unittest.TestCase):
             exercise = growth.perform("exercise_warmup", now=now)
             self.assertTrue(exercise.accepted)
             self.assertEqual(exercise.duration_minutes, 15)
+            self.assertAlmostEqual(growth.value("energy"), 100.0)
+
+            completed = growth.complete_timed_activity(
+                "exercise_warmup", 15, 15 * 60, now=now
+            )
+            self.assertTrue(completed.accepted)
             self.assertAlmostEqual(growth.value("energy"), 94.0)
 
     def test_selected_work_and_game_duration_scales_results(self) -> None:
@@ -67,6 +73,13 @@ class GrowthDecayTests(unittest.TestCase):
             self.assertTrue(work.accepted)
             self.assertEqual(work.duration_minutes, 60)
             self.assertEqual(work.activity_label, "写笔记")
+            self.assertAlmostEqual(growth.value("energy"), 80.0)
+            self.assertEqual(int(growth.state["xp"]), 0)
+
+            work_completed = growth.complete_timed_activity(
+                "work_notes", 60, 60 * 60, now=now
+            )
+            self.assertTrue(work_completed.accepted)
             self.assertAlmostEqual(growth.value("energy"), 74.0)
             self.assertEqual(int(growth.state["xp"]), 8)
 
@@ -75,8 +88,37 @@ class GrowthDecayTests(unittest.TestCase):
             self.assertTrue(game.accepted)
             self.assertEqual(game.duration_minutes, 30)
             self.assertEqual(game.activity_label, "摸摸互动")
+            self.assertAlmostEqual(growth.value("energy"), 74.0)
+            self.assertAlmostEqual(growth.value("mood"), 79.0)
+
+            game_completed = growth.complete_timed_activity(
+                "game_pet", 30, 30 * 60, now=now
+            )
+            self.assertTrue(game_completed.accepted)
             self.assertAlmostEqual(growth.value("energy"), 72.0)
             self.assertAlmostEqual(growth.value("mood"), 89.0)
+
+    def test_partial_activity_settlement_scales_rewards_by_elapsed_time(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            growth = self.make_growth(root)
+            now = time.time()
+            growth.state["last_update"] = now
+
+            started = growth.perform("game_controller", now=now, duration_minutes=30)
+            self.assertTrue(started.accepted)
+            self.assertAlmostEqual(growth.value("energy"), 80.0)
+            self.assertAlmostEqual(growth.value("mood"), 75.0)
+
+            completed = growth.complete_timed_activity(
+                "game_controller", 30, 15 * 60, now=now
+            )
+            self.assertTrue(completed.accepted)
+            self.assertIn("50%", completed.message)
+            self.assertAlmostEqual(growth.value("energy"), 76.0)
+            self.assertAlmostEqual(growth.value("mood"), 83.0)
+            self.assertAlmostEqual(growth.value("fullness"), 78.0)
+            self.assertAlmostEqual(growth.value("cleanliness"), 84.0)
+            self.assertEqual(int(growth.state["xp"]), 3)
 
     def test_activity_categories_expose_expected_duration_choices(self) -> None:
         self.assertIn(("game_pet", "摸摸互动"), CARE_OPTIONS["game"])

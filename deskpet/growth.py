@@ -114,6 +114,31 @@ DEFAULT_NATURAL_DECAY_MULTIPLIER = 2.0
 DEFAULT_PASSIVE_ENERGY_DECAY_PER_HOUR = 0.2
 DEFAULT_EXERCISE_ENERGY_MULTIPLIER = 2.0
 
+TIMED_ACTIVITY_EFFECTS: dict[str, dict[str, float]] = {
+    "game_pet": {"mood": 5, "affection": 2, "energy": -1, "fullness": -1, "xp": 2},
+    "exercise_warmup": {"mood": 4, "energy": -3, "health": 2, "fullness": -2, "cleanliness": -1, "xp": 2},
+    "exercise_cheer": {"mood": 10, "energy": -7, "health": 3, "fullness": -4, "cleanliness": -2, "affection": 2, "xp": 3},
+    "exercise_run": {"mood": 7, "energy": -14, "health": 5, "fullness": -6, "cleanliness": -5, "affection": 2, "xp": 4},
+    "work_notes": {"energy": -3, "fullness": -2, "mood": 2, "affection": 1, "xp": 4},
+    "work_computer": {"energy": -5, "fullness": -3, "mood": 1, "cleanliness": -1, "xp": 6},
+    "work_office": {"energy": -7, "fullness": -4, "mood": -1, "affection": 1, "xp": 8},
+    "game_controller": {"mood": 8, "energy": -4, "fullness": -2, "cleanliness": -1, "xp": 3},
+    "game_comedy": {"mood": 10, "affection": 3, "energy": -3, "fullness": -2, "xp": 4},
+}
+
+TIMED_ACTIVITY_ANIMATIONS = {
+    "game_pet": ("134",),
+    "exercise_warmup": ("108",),
+    "exercise_cheer": ("030",),
+    "exercise_run": ("179",),
+    "work_notes": ("002",),
+    "work_computer": ("115",),
+    "work_office": ("148",),
+    "game_controller": ("149",),
+    "game_comedy": ("164",),
+}
+
+
 
 @dataclass(frozen=True)
 class CareResult:
@@ -364,6 +389,78 @@ class PetGrowth:
         name = {"food": "喂食", "exercise": "运动", "work": "工作", "game": "游戏"}.get(group, "这个操作")
         return CareResult(False, f"{name}还要等 {minutes} 分钟～")
 
+    def _timed_effects(self, action: str, factor: float) -> dict[str, float]:
+        effects = {
+            name: float(value) * factor
+            for name, value in TIMED_ACTIVITY_EFFECTS[action].items()
+        }
+        if CARE_ACTION_GROUPS.get(action) == "exercise":
+            effects["energy"] *= self.exercise_energy_multiplier
+        return effects
+
+    def _start_timed_activity(
+        self, action: str, duration: int, duration_factor: float, now: float
+    ) -> CareResult:
+        effects = self._timed_effects(action, duration_factor)
+        energy_cost = max(0.0, -effects.get("energy", 0.0))
+        if self.value("energy") < energy_cost:
+            return CareResult(False, f"体力不足，完成这次活动至少需要 {energy_cost:g} 点体力。")
+        group = CARE_ACTION_GROUPS[action]
+        cooldowns = dict(self.state.get("cooldowns", {}))
+        cooldowns[group] = now + ACTION_COOLDOWNS[group]
+        self.state["cooldowns"] = cooldowns
+        self.state["last_update"] = now
+        self.dirty = True
+        self.save()
+        label = ACTIVITY_LABELS[action]
+        return CareResult(
+            True,
+            f"{duration} 分钟{label}开始！结束时会按实际完成时间结算加成。",
+            TIMED_ACTIVITY_ANIMATIONS[action],
+            duration_minutes=duration,
+            activity_label=label,
+        )
+
+    def complete_timed_activity(
+        self, action: str, planned_minutes: int, elapsed_seconds: float, now: float | None = None
+    ) -> CareResult:
+        action = CARE_ACTION_ALIASES.get(action, action)
+        if action not in TIMED_ACTIVITY_EFFECTS:
+            return CareResult(False, "这个活动无法结算。")
+        now = now if now is not None else time.time()
+        planned_seconds = max(60.0, float(planned_minutes) * 60.0)
+        ratio = max(0.0, min(1.0, float(elapsed_seconds) / planned_seconds))
+        effects = self._timed_effects(
+            action, max(1, int(planned_minutes)) / ACTIVITY_BASE_MINUTES[CARE_ACTION_GROUPS[action]]
+        )
+        stat_changes = {
+            name: round(value * ratio, 1)
+            for name, value in effects.items()
+            if name != "xp"
+        }
+        if stat_changes:
+            self._add(**stat_changes)
+        xp_amount = max(0, round(effects.get("xp", 0.0) * ratio))
+        level_up = self._add_xp(xp_amount) if xp_amount else None
+        self.state["last_update"] = now
+        self.dirty = True
+        self.save()
+        minutes = elapsed_seconds / 60.0
+        changes = []
+        for name, value in stat_changes.items():
+            if not value:
+                continue
+            sign = "+" if value > 0 else ""
+            changes.append(f"{STAT_NAMES[name]}{sign}{value:g}")
+        if xp_amount:
+            changes.append(f"经验+{xp_amount}")
+        summary = "，".join(changes) if changes else "本次时间太短，暂未产生数值变化"
+        message = f"{ACTIVITY_LABELS[action]}完成约 {minutes:.1f} 分钟（{ratio:.0%}）：{summary}"
+        if level_up:
+            message += f" 升到 {level_up} 级啦！"
+        return CareResult(True, message, level_up=level_up)
+
+
     def perform(
         self,
         action: str,
@@ -385,7 +482,6 @@ class PetGrowth:
                 except (TypeError, ValueError):
                     return CareResult(False, "活动时长无效，请重新选择。")
             duration_factor = duration / base_minutes
-        scaled = lambda value: round(float(value) * duration_factor, 1)
         self.update(now)
         if self.sleeping and action != "sleep":
             return CareResult(False, "我正在睡觉，先把我叫醒吧～")
@@ -394,6 +490,10 @@ class PetGrowth:
         if rejected:
             return rejected
 
+        if base_minutes is not None:
+            return self._start_timed_activity(action, int(duration), duration_factor, now)
+
+        scaled = lambda value: round(float(value) * duration_factor, 1)
         level_up: int | None = None
         animations: tuple[str, ...]
         if action == "feed_meal":

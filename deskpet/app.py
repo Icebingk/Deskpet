@@ -310,7 +310,7 @@ class DeskPetApp:
                     self.behavior.play_external(str(activity["animation"]), "activity")
                 )
             else:
-                self.active_activity = None
+                self._settle_active_activity(time.monotonic())
                 self._apply_behavior(self.behavior.return_to_base())
 
     def _set_scale(self, scale: float) -> None:
@@ -441,7 +441,9 @@ class DeskPetApp:
             self.active_activity
             and now >= float(self.active_activity["ends_at"])
         ):
-            self.active_activity = None
+            self._settle_active_activity(now)
+        if self.active_activity and action == "sleep":
+            self._settle_active_activity(now)
         if (
             self.active_activity
             and (action in TIMED_CARE_ACTIONS or action in ("pet", "play"))
@@ -472,6 +474,8 @@ class DeskPetApp:
                     "action": action,
                     "label": result.activity_label,
                     "animation": result.animations[0],
+                    "started_at": now,
+                    "duration_minutes": result.duration_minutes,
                     "ends_at": now + result.duration_minutes * 60,
                 }
                 self.action_queue.clear()
@@ -485,18 +489,31 @@ class DeskPetApp:
             self.last_user_activity = time.monotonic()
         self.needs_redraw = True
 
+    def _settle_active_activity(self, now: float) -> CareResult | None:
+        activity = self.active_activity
+        if not activity:
+            return None
+        self.active_activity = None
+        result = self.growth.complete_timed_activity(
+            str(activity["action"]),
+            int(activity["duration_minutes"]),
+            max(0.0, now - float(activity["started_at"])),
+        )
+        if result.level_up:
+            self.behavior.set_level(result.level_up)
+        return result
+
+
     def _stop_active_activity(self) -> None:
         activity = self.active_activity
         if not activity:
             self.bubble.show("当前没有进行中的活动")
             return
-        label = str(activity["label"])
-        self.active_activity = None
+        result = self._settle_active_activity(time.monotonic())
         self.action_queue.clear()
         self._apply_behavior(self.behavior.return_to_base())
-        self.bubble.show(f"{label}已结束，休息一下吧～", seconds=3.5)
+        self.bubble.show(result.message if result else "活动已结束", seconds=4.5)
         self.needs_redraw = True
-
 
     def _launch_hud_tool(self, tool_id: str) -> None:
         if tool_id == "control_panel":
@@ -1213,9 +1230,9 @@ class DeskPetApp:
                 activity = self.active_activity
                 if not activity or now >= float(activity["ends_at"]):
                     label = str(activity["label"]) if activity else "活动"
-                    self.active_activity = None
+                    result = self._settle_active_activity(now)
                     self._apply_behavior(self.behavior.return_to_base(now))
-                    self.bubble.show(f"{label}结束啦，辛苦了～", seconds=4.5)
+                    self.bubble.show(result.message if result else f"{label}结束啦，辛苦了～", seconds=4.5)
                 elif finished and activity_loops:
                     self.current_clip.reset()
             elif self.current_mode == "sequence" and finished:
