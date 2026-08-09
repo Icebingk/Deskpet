@@ -508,8 +508,8 @@ class Win32Window:
         hwnd = self.user32.GetForegroundWindow()
         if not hwnd or hwnd == self.hwnd:
             return False
-        rect = self._window_rect(hwnd)
-        if rect is None:
+        rect = Rect()
+        if not self.user32.GetWindowRect(hwnd, ctypes.byref(rect)):
             return False
         work = self.work_area_for(rect.left, rect.top)
         return (
