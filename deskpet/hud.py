@@ -7,16 +7,18 @@ import time
 import pygame
 
 from .constants import WINDOW_HEIGHT, WINDOW_WIDTH
-from .growth import CARE_OPTIONS, PetGrowth
+from .growth import ACTIVITY_DURATION_OPTIONS, CARE_OPTIONS, PetGrowth
 
 
 class PetHud:
     """鼠标靠近角色时显示紧凑状态与常用照顾操作。"""
 
     MAIN_BUTTONS = (
-        ("food_menu", "喂食 ›", (255, 230, 184)),
+        ("food_menu", "吃饭 ›", (255, 230, 184)),
         ("exercise_menu", "运动 ›", (207, 238, 255)),
-        ("pet", "摸摸", (226, 218, 255)),
+        ("work_menu", "工作 ›", (255, 222, 169)),
+        ("game_menu", "游戏 ›", (226, 218, 255)),
+        ("tool_menu", "工具 ›", (224, 230, 235)),
         ("bathe", "洗澡", (200, 239, 232)),
         ("sleep", "睡觉", (221, 228, 245)),
         ("treat", "治疗", (226, 239, 204)),
@@ -25,7 +27,19 @@ class PetHud:
     SUBMENU_COLORS = {
         "food": (255, 230, 184),
         "exercise": (207, 238, 255),
+        "work": (255, 222, 169),
+        "game": (226, 218, 255),
+        "tool": (224, 230, 235),
+        "duration": (235, 228, 218),
     }
+
+    TOOL_OPTIONS = (
+        ("tool:control_panel", "控制面板"),
+        ("tool:calculator", "计算器"),
+        ("tool:notepad", "记事本"),
+        ("tool:screenshot", "截图工具"),
+        ("tool:explorer", "资源管理器"),
+    )
 
     BAR_ITEMS = (
         ("fullness", "饱", (244, 174, 91)),
@@ -52,14 +66,33 @@ class PetHud:
         self.hovered_action: str | None = None
         self.last_mouse = (-1000, -1000)
         self.open_menu: str | None = None
+        self.pending_action: str | None = None
+        self.pending_category: str | None = None
 
     def _active_buttons(self) -> tuple[tuple[str, str, tuple[int, int, int]], ...]:
+        back = (("menu_back", "‹ 返回", (232, 228, 226)),)
+        if (
+            self.open_menu == "duration"
+            and self.pending_category in ACTIVITY_DURATION_OPTIONS
+            and self.pending_action
+        ):
+            color = self.SUBMENU_COLORS["duration"]
+            options = tuple(
+                (f"duration:{minutes}", f"{minutes} 分钟", color)
+                for minutes in ACTIVITY_DURATION_OPTIONS[self.pending_category]
+            )
+            return back + options
+        if self.open_menu == "tool":
+            color = self.SUBMENU_COLORS["tool"]
+            return back + tuple(
+                (action, label, color) for action, label in self.TOOL_OPTIONS
+            )
         if self.open_menu in CARE_OPTIONS:
             color = self.SUBMENU_COLORS[self.open_menu]
             options = tuple(
                 (action, label, color) for action, label in CARE_OPTIONS[self.open_menu]
             )
-            return (("menu_back", "‹ 返回", (232, 228, 226)),) + options
+            return back + options
         return self.MAIN_BUTTONS
 
     def _layout(
@@ -85,7 +118,7 @@ class PetHud:
         card_top = max(8, character_rect.top - card_height - 9)
         self.card_rect = pygame.Rect(card_left, card_top, card_width, card_height)
 
-        button_width, button_height, gap = 54, 22, 3
+        button_width, button_height, gap = 68, 22, 3
         buttons = self._active_buttons()
         total_height = len(buttons) * button_height + (len(buttons) - 1) * gap
         right_candidate = character_rect.right + 8
@@ -132,6 +165,8 @@ class PetHud:
         self.visible = not force_hide and now < self.visible_until
         if not self.visible:
             self.open_menu = None
+            self.pending_action = None
+            self.pending_category = None
         self.hovered_action = None
         if self.visible:
             for action, rect in self.button_rects.items():
@@ -143,21 +178,48 @@ class PetHud:
     def action_at(self, position: tuple[int, int]) -> str | None:
         if not self.visible:
             return None
+        menu_actions = {
+            "food_menu": "food",
+            "exercise_menu": "exercise",
+            "work_menu": "work",
+            "game_menu": "game",
+            "tool_menu": "tool",
+        }
         for action, rect in self.button_rects.items():
-            if rect.collidepoint(position):
-                if action == "food_menu":
-                    self.open_menu = "food"
-                    self.visible_until = time.monotonic() + 2.5
-                    return "__menu__"
-                if action == "exercise_menu":
-                    self.open_menu = "exercise"
-                    self.visible_until = time.monotonic() + 2.5
-                    return "__menu__"
-                if action == "menu_back":
+            if not rect.collidepoint(position):
+                continue
+            if action in menu_actions:
+                self.open_menu = menu_actions[action]
+                self.pending_action = None
+                self.pending_category = None
+                self.visible_until = time.monotonic() + 2.5
+                return "__menu__"
+            if action == "menu_back":
+                if self.open_menu == "duration" and self.pending_category:
+                    self.open_menu = self.pending_category
+                else:
                     self.open_menu = None
-                    self.visible_until = time.monotonic() + 1.0
-                    return "__menu__"
-                return action
+                self.pending_action = None
+                self.pending_category = None
+                self.visible_until = time.monotonic() + 1.0
+                return "__menu__"
+            if self.open_menu == "duration" and action.startswith("duration:"):
+                minutes = int(action.partition(":")[2])
+                selected = self.pending_action
+                self.open_menu = None
+                self.pending_action = None
+                self.pending_category = None
+                return f"activity:{selected}:{minutes}" if selected else None
+            if self.open_menu in ACTIVITY_DURATION_OPTIONS:
+                self.pending_action = action
+                self.pending_category = self.open_menu
+                self.open_menu = "duration"
+                self.visible_until = time.monotonic() + 2.5
+                return "__menu__"
+            self.open_menu = None
+            self.pending_action = None
+            self.pending_category = None
+            return action
         return None
 
     @staticmethod
@@ -173,13 +235,18 @@ class PetHud:
         surface = font.render(text, True, color)
         screen.blit(surface, surface.get_rect(left=left, centery=centery))
 
-    def _draw_card(self, screen: pygame.Surface, growth: PetGrowth) -> None:
+    def _draw_card(
+        self,
+        screen: pygame.Surface,
+        growth: PetGrowth,
+        activity_text: str | None = None,
+    ) -> None:
         shadow = self.card_rect.move(2, 3)
         pygame.draw.rect(screen, (211, 198, 202), shadow, border_radius=12)
         pygame.draw.rect(screen, (255, 251, 247), self.card_rect, border_radius=12)
         pygame.draw.rect(screen, (113, 91, 99), self.card_rect, 1, border_radius=12)
 
-        state_text = "睡眠中" if growth.sleeping else "陪伴中"
+        state_text = activity_text or ("睡眠中" if growth.sleeping else "陪伴中")
         title = f"Lv.{growth.level}  {state_text}"
         self._text(
             screen,
@@ -189,13 +256,17 @@ class PetHud:
             left=self.card_rect.left + 9,
             centery=self.card_rect.top + 13,
         )
-        affection = self.small_font.render(
-            f"♡ {growth.value('affection'):.0f}", True, (211, 91, 126)
-        )
-        screen.blit(
-            affection,
-            affection.get_rect(right=self.card_rect.right - 9, centery=self.card_rect.top + 13),
-        )
+        if activity_text is None:
+            affection = self.small_font.render(
+                f"♡ {growth.value('affection'):.0f}", True, (211, 91, 126)
+            )
+            screen.blit(
+                affection,
+                affection.get_rect(
+                    right=self.card_rect.right - 9,
+                    centery=self.card_rect.top + 13,
+                ),
+            )
 
         for index, (name, label, color) in enumerate(self.BAR_ITEMS):
             column = index % 3
@@ -246,9 +317,16 @@ class PetHud:
             text_surface = self.font.render(label, True, (63, 52, 57))
             screen.blit(text_surface, text_surface.get_rect(center=rect.center))
 
-    def draw(self, screen: pygame.Surface, growth: PetGrowth, *, show_card: bool = True) -> None:
+    def draw(
+        self,
+        screen: pygame.Surface,
+        growth: PetGrowth,
+        *,
+        show_card: bool = True,
+        activity_text: str | None = None,
+    ) -> None:
         if not self.visible:
             return
         if show_card:
-            self._draw_card(screen, growth)
+            self._draw_card(screen, growth, activity_text)
         self._draw_buttons(screen, growth)

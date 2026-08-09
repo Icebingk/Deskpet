@@ -40,7 +40,8 @@ DEFAULT_STATE: dict[str, object] = {
 CARE_ACTION_ALIASES = {
     "feed": "feed_meal",
     "snack": "feed_icecream",
-    "play": "exercise_cheer",
+    "play": "game_controller",
+    "pet": "game_pet",
 }
 
 CARE_ACTION_GROUPS = {
@@ -49,6 +50,12 @@ CARE_ACTION_GROUPS = {
     "exercise_warmup": "exercise",
     "exercise_cheer": "exercise",
     "exercise_run": "exercise",
+    "work_notes": "work",
+    "work_computer": "work",
+    "work_office": "work",
+    "game_pet": "game",
+    "game_controller": "game",
+    "game_comedy": "game",
 }
 
 CARE_OPTIONS = {
@@ -61,11 +68,43 @@ CARE_OPTIONS = {
         ("exercise_cheer", "啦啦操"),
         ("exercise_run", "跑步"),
     ),
+    "work": (
+        ("work_notes", "写笔记"),
+        ("work_computer", "电脑办公"),
+        ("work_office", "上班中"),
+    ),
+    "game": (
+        ("game_pet", "摸摸互动"),
+        ("game_controller", "手柄游戏"),
+        ("game_comedy", "一起说相声"),
+    ),
 }
+
+ACTIVITY_DURATION_OPTIONS = {
+    "exercise": (5, 15, 30),
+    "work": (15, 30, 60),
+    "game": (5, 15, 30),
+}
+
+ACTIVITY_BASE_MINUTES = {
+    "exercise": 15,
+    "work": 30,
+    "game": 15,
+}
+
+ACTIVITY_LABELS = {
+    action: label
+    for category in ("exercise", "work", "game")
+    for action, label in CARE_OPTIONS[category]
+}
+
+TIMED_CARE_ACTIONS = frozenset(ACTIVITY_LABELS)
 
 ACTION_COOLDOWNS = {
     "food": 15 * 60,
     "exercise": 10 * 60,
+    "work": 5 * 60,
+    "game": 5 * 60,
     "bathe": 30 * 60,
     "treat": 60 * 60,
 }
@@ -82,6 +121,8 @@ class CareResult:
     message: str
     animations: tuple[str, ...] = ()
     level_up: int | None = None
+    duration_minutes: int | None = None
+    activity_label: str | None = None
 
 
 class PetGrowth:
@@ -291,10 +332,23 @@ class PetGrowth:
             "food": ("food", "feed", "snack", "feed_meal", "feed_icecream"),
             "exercise": (
                 "exercise",
-                "play",
                 "exercise_warmup",
                 "exercise_cheer",
                 "exercise_run",
+            ),
+            "work": (
+                "work",
+                "work_notes",
+                "work_computer",
+                "work_office",
+            ),
+            "game": (
+                "game",
+                "play",
+                "pet",
+                "game_pet",
+                "game_controller",
+                "game_comedy",
             ),
         }.get(group, (group,))
         cooldowns = dict(self.state.get("cooldowns", {}))
@@ -307,12 +361,31 @@ class PetGrowth:
             return None
         minutes = max(1, int((remaining + 59) // 60))
         group = CARE_ACTION_GROUPS.get(action, action)
-        name = {"food": "喂食", "exercise": "运动"}.get(group, "这个操作")
+        name = {"food": "喂食", "exercise": "运动", "work": "工作", "game": "游戏"}.get(group, "这个操作")
         return CareResult(False, f"{name}还要等 {minutes} 分钟～")
 
-    def perform(self, action: str, now: float | None = None) -> CareResult:
+    def perform(
+        self,
+        action: str,
+        now: float | None = None,
+        duration_minutes: int | None = None,
+    ) -> CareResult:
         now = now if now is not None else time.time()
         action = CARE_ACTION_ALIASES.get(action, action)
+        activity_group = CARE_ACTION_GROUPS.get(action)
+        base_minutes = ACTIVITY_BASE_MINUTES.get(activity_group)
+        duration: int | None = None
+        duration_factor = 1.0
+        if base_minutes is not None:
+            if duration_minutes is None:
+                duration = base_minutes
+            else:
+                try:
+                    duration = max(1, min(180, int(duration_minutes)))
+                except (TypeError, ValueError):
+                    return CareResult(False, "活动时长无效，请重新选择。")
+            duration_factor = duration / base_minutes
+        scaled = lambda value: round(float(value) * duration_factor, 1)
         self.update(now)
         if self.sleeping and action != "sleep":
             return CareResult(False, "我正在睡觉，先把我叫醒吧～")
@@ -326,64 +399,166 @@ class PetGrowth:
         if action == "feed_meal":
             if self.value("fullness") >= 92:
                 return CareResult(False, "已经吃得很饱啦，晚点再喂我吧～")
-            self._add(fullness=35, health=3, mood=2)
+            self._add(fullness=35, energy=12, health=3, mood=2)
             level_up = self._add_xp(4)
             animations = ("088", "147")
-            message = "营养餐吃完啦！饱腹+35，健康+3，心情+2"
+            message = "营养餐吃完啦！饱腹+35，体力+12，健康+3，心情+2"
         elif action == "feed_icecream":
             if self.value("fullness") >= 97:
                 return CareResult(False, "肚子装不下冰淇淋啦～")
-            self._add(fullness=10, mood=14, health=-2, cleanliness=-3)
+            self._add(fullness=10, energy=4, mood=14, health=-2, cleanliness=-3)
             level_up = self._add_xp(2)
             animations = ("162", "162", "162")
-            message = "冰淇淋真开心！饱腹+10，心情+14，健康-2，清洁-3"
-        elif action == "pet":
-            timestamps = list(self.state.get("pet_timestamps", []))
-            if len(timestamps) >= 3:
-                return CareResult(False, "摸太多要秃啦，等一会儿再摸～")
-            timestamps.append(now)
-            self.state["pet_timestamps"] = timestamps
-            self._add(mood=5, affection=2)
-            animations = ("134",)
-            message = "再摸摸耳朵，好舒服～"
-        elif action == "exercise_warmup":
-            energy_cost = 3 * self.exercise_energy_multiplier
+            message = "冰淇淋真开心！饱腹+10，体力+4，心情+14，健康-2，清洁-3"
+        elif action == "game_pet":
+            energy_cost = scaled(1)
             if self.value("energy") < energy_cost:
-                return CareResult(False, "体力不够啦，让我先睡一会儿～")
-            self._add(mood=4, energy=-energy_cost, health=2, fullness=-2, cleanliness=-1)
-            level_up = self._add_xp(2)
-            animations = ("108",)
-            message = f"热身弹跳完成！健康+2，心情+4，体力-{energy_cost:g}，饱腹-2"
-        elif action == "exercise_cheer":
-            energy_cost = 7 * self.exercise_energy_multiplier
+                return CareResult(False, "体力不够啦，先休息一下再玩～")
+            self._add(
+                mood=scaled(5),
+                affection=scaled(2),
+                energy=-energy_cost,
+                fullness=-scaled(1),
+            )
+            level_up = self._add_xp(max(1, round(2 * duration_factor)))
+            animations = ("134",)
+            message = (
+                f"{duration} 分钟摸摸互动开始！"
+                f"心情+{scaled(5):g}，好感+{scaled(2):g}，体力-{energy_cost:g}"
+            )
+        elif action == "exercise_warmup":
+            energy_cost = scaled(3 * self.exercise_energy_multiplier)
             if self.value("energy") < energy_cost:
                 return CareResult(False, "体力不够啦，让我先睡一会儿～")
             self._add(
-                mood=10,
+                mood=scaled(4),
                 energy=-energy_cost,
-                health=3,
-                fullness=-4,
-                cleanliness=-2,
-                affection=2,
+                health=scaled(2),
+                fullness=-scaled(2),
+                cleanliness=-scaled(1),
             )
-            level_up = self._add_xp(3)
-            animations = ("030", "030")
-            message = f"啦啦操完成！心情+10，健康+3，体力-{energy_cost:g}，饱腹-4"
+            level_up = self._add_xp(max(1, round(2 * duration_factor)))
+            animations = ("108",)
+            message = (
+                f"{duration} 分钟热身开始！健康+{scaled(2):g}，"
+                f"心情+{scaled(4):g}，体力-{energy_cost:g}"
+            )
+        elif action == "exercise_cheer":
+            energy_cost = scaled(7 * self.exercise_energy_multiplier)
+            if self.value("energy") < energy_cost:
+                return CareResult(False, "体力不够啦，让我先睡一会儿～")
+            self._add(
+                mood=scaled(10),
+                energy=-energy_cost,
+                health=scaled(3),
+                fullness=-scaled(4),
+                cleanliness=-scaled(2),
+                affection=scaled(2),
+            )
+            level_up = self._add_xp(max(1, round(3 * duration_factor)))
+            animations = ("030",)
+            message = (
+                f"{duration} 分钟啦啦操开始！心情+{scaled(10):g}，"
+                f"健康+{scaled(3):g}，体力-{energy_cost:g}"
+            )
         elif action == "exercise_run":
-            energy_cost = 14 * self.exercise_energy_multiplier
+            energy_cost = scaled(14 * self.exercise_energy_multiplier)
             if self.value("energy") < energy_cost:
                 return CareResult(False, f"跑步至少需要 {energy_cost:g} 点体力，先休息一下吧～")
             self._add(
-                mood=7,
+                mood=scaled(7),
                 energy=-energy_cost,
-                health=5,
-                fullness=-6,
-                cleanliness=-5,
-                affection=2,
+                health=scaled(5),
+                fullness=-scaled(6),
+                cleanliness=-scaled(5),
+                affection=scaled(2),
             )
-            level_up = self._add_xp(4)
-            animations = ("179", "179", "179")
-            message = f"跑步完成！健康+5，心情+7，体力-{energy_cost:g}，饱腹-6，清洁-5"
+            level_up = self._add_xp(max(1, round(4 * duration_factor)))
+            animations = ("179",)
+            message = (
+                f"{duration} 分钟跑步开始！健康+{scaled(5):g}，"
+                f"心情+{scaled(7):g}，体力-{energy_cost:g}"
+            )
+        elif action == "work_notes":
+            energy_cost = scaled(3)
+            if self.value("energy") < energy_cost:
+                return CareResult(False, "体力不够啦，先休息一下再工作～")
+            self._add(
+                energy=-energy_cost,
+                fullness=-scaled(2),
+                mood=scaled(2),
+                affection=scaled(1),
+            )
+            level_up = self._add_xp(max(1, round(4 * duration_factor)))
+            animations = ("002",)
+            message = (
+                f"{duration} 分钟写笔记开始！经验+{max(1, round(4 * duration_factor))}，"
+                f"体力-{energy_cost:g}"
+            )
+        elif action == "work_computer":
+            energy_cost = scaled(5)
+            if self.value("energy") < energy_cost:
+                return CareResult(False, "体力不够啦，先休息一下再工作～")
+            self._add(
+                energy=-energy_cost,
+                fullness=-scaled(3),
+                mood=scaled(1),
+                cleanliness=-scaled(1),
+            )
+            level_up = self._add_xp(max(1, round(6 * duration_factor)))
+            animations = ("115",)
+            message = (
+                f"{duration} 分钟电脑办公开始！经验+{max(1, round(6 * duration_factor))}，"
+                f"体力-{energy_cost:g}"
+            )
+        elif action == "work_office":
+            energy_cost = scaled(7)
+            if self.value("energy") < energy_cost:
+                return CareResult(False, "体力不够啦，先休息一下再工作～")
+            self._add(
+                energy=-energy_cost,
+                fullness=-scaled(4),
+                mood=-scaled(1),
+                affection=scaled(1),
+            )
+            level_up = self._add_xp(max(1, round(8 * duration_factor)))
+            animations = ("148",)
+            message = (
+                f"{duration} 分钟上班开始！经验+{max(1, round(8 * duration_factor))}，"
+                f"体力-{energy_cost:g}"
+            )
+        elif action == "game_controller":
+            energy_cost = scaled(4)
+            if self.value("energy") < energy_cost:
+                return CareResult(False, "体力不够啦，先休息一下再玩～")
+            self._add(
+                mood=scaled(8),
+                energy=-energy_cost,
+                fullness=-scaled(2),
+                cleanliness=-scaled(1),
+            )
+            level_up = self._add_xp(max(1, round(3 * duration_factor)))
+            animations = ("149",)
+            message = (
+                f"{duration} 分钟手柄游戏开始！心情+{scaled(8):g}，"
+                f"体力-{energy_cost:g}"
+            )
+        elif action == "game_comedy":
+            energy_cost = scaled(3)
+            if self.value("energy") < energy_cost:
+                return CareResult(False, "体力不够啦，先休息一下再玩～")
+            self._add(
+                mood=scaled(10),
+                affection=scaled(3),
+                energy=-energy_cost,
+                fullness=-scaled(2),
+            )
+            level_up = self._add_xp(max(1, round(4 * duration_factor)))
+            animations = ("164",)
+            message = (
+                f"{duration} 分钟说相声开始！心情+{scaled(10):g}，"
+                f"好感+{scaled(3):g}，体力-{energy_cost:g}"
+            )
         elif action == "bathe":
             if self.value("cleanliness") >= 92:
                 return CareResult(False, "我现在很干净，不用重复洗澡啦～")
@@ -420,7 +595,14 @@ class PetGrowth:
         if level_up:
             message += f" 升到 {level_up} 级啦！"
         self.save()
-        return CareResult(True, message, animations, level_up)
+        return CareResult(
+            True,
+            message,
+            animations,
+            level_up,
+            duration_minutes=duration,
+            activity_label=ACTIVITY_LABELS.get(action),
+        )
 
     def suggested_need(self) -> tuple[str, str] | None:
         if self.sleeping:

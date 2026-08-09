@@ -8,7 +8,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from deskpet.behavior import BehaviorController
-from deskpet.growth import DEFAULT_STATE, PetGrowth
+from deskpet.growth import (
+    ACTIVITY_DURATION_OPTIONS,
+    CARE_OPTIONS,
+    DEFAULT_STATE,
+    PetGrowth,
+)
 from deskpet.settings import DEFAULT_SETTINGS, SettingsStore
 
 
@@ -37,19 +42,47 @@ class GrowthDecayTests(unittest.TestCase):
             growth._apply_elapsed(3600)
             self.assertAlmostEqual(growth.value("energy"), 52.0)
 
-    def test_feeding_keeps_energy_and_exercise_cost_is_doubled(self) -> None:
+    def test_food_restores_energy_and_exercise_uses_default_duration(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             growth = self.make_growth(root)
             now = time.time()
             growth.state["last_update"] = now
             feed = growth.perform("feed_meal", now=now)
             self.assertTrue(feed.accepted)
-            self.assertAlmostEqual(growth.value("energy"), 80.0)
+            self.assertAlmostEqual(growth.value("energy"), 92.0)
 
             growth.state["cooldowns"] = {}
             exercise = growth.perform("exercise_warmup", now=now)
             self.assertTrue(exercise.accepted)
+            self.assertEqual(exercise.duration_minutes, 15)
+            self.assertAlmostEqual(growth.value("energy"), 86.0)
+
+    def test_selected_work_and_game_duration_scales_results(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            growth = self.make_growth(root)
+            now = time.time()
+            growth.state["last_update"] = now
+
+            work = growth.perform("work_notes", now=now, duration_minutes=60)
+            self.assertTrue(work.accepted)
+            self.assertEqual(work.duration_minutes, 60)
+            self.assertEqual(work.activity_label, "写笔记")
             self.assertAlmostEqual(growth.value("energy"), 74.0)
+            self.assertEqual(int(growth.state["xp"]), 8)
+
+            growth.state["cooldowns"] = {}
+            game = growth.perform("game_pet", now=now, duration_minutes=30)
+            self.assertTrue(game.accepted)
+            self.assertEqual(game.duration_minutes, 30)
+            self.assertEqual(game.activity_label, "摸摸互动")
+            self.assertAlmostEqual(growth.value("energy"), 72.0)
+            self.assertAlmostEqual(growth.value("mood"), 89.0)
+
+    def test_activity_categories_expose_expected_duration_choices(self) -> None:
+        self.assertIn(("game_pet", "摸摸互动"), CARE_OPTIONS["game"])
+        self.assertEqual(ACTIVITY_DURATION_OPTIONS["work"], (15, 30, 60))
+        self.assertEqual(ACTIVITY_DURATION_OPTIONS["exercise"], (5, 15, 30))
+        self.assertEqual(ACTIVITY_DURATION_OPTIONS["game"], (5, 15, 30))
 
     def test_user_can_override_growth_rates(self) -> None:
         with tempfile.TemporaryDirectory() as root:

@@ -52,7 +52,7 @@ from .constants import (
 )
 from .control_panel import ControlPanelBridge
 from .dialogue import SpeechBubble
-from .growth import PetGrowth
+from .growth import TIMED_CARE_ACTIONS, PetGrowth
 from .hud import PetHud
 from .persistence import DeskPetDatabase
 from .physics import DesktopPhysics, PhysicsEvent
@@ -167,6 +167,7 @@ class DeskPetApp:
         self.next_growth_tick = time.monotonic() + self.growth_tick_seconds
         self.growth_save_due = time.monotonic() + 60
         self.next_need_check = time.monotonic() + random.uniform(3 * 60, 6 * 60)
+        self.active_activity: dict[str, object] | None = None
         self.action_queue: list[str] = []
         self.bubble = SpeechBubble()
         self.bubble.typing_speed = float(self.bubble_speed)
@@ -288,7 +289,14 @@ class DeskPetApp:
                 mode = "sequence"
             self._apply_behavior(self.behavior.play_external(action, mode))
         else:
-            self._apply_behavior(self.behavior.return_to_base())
+            activity = self.active_activity
+            if activity and time.monotonic() < float(activity["ends_at"]):
+                self._apply_behavior(
+                    self.behavior.play_external(str(activity["animation"]), "activity")
+                )
+            else:
+                self.active_activity = None
+                self._apply_behavior(self.behavior.return_to_base())
 
     def _set_scale(self, scale: float) -> None:
         new_scale = max(MIN_SCALE, min(MAX_SCALE, scale))
@@ -390,17 +398,77 @@ class DeskPetApp:
         if self.hotkeys.consume("toggle_pause"):
             self._toggle_pause()
 
-    def _perform_care(self, action: str) -> None:
-        result = self.growth.perform(action)
-        self.bubble.show(result.message, seconds=4.2)
+    def _perform_care(
+        self, action: str, duration_minutes: int | None = None
+    ) -> None:
+        now = time.monotonic()
+        if (
+            self.active_activity
+            and now >= float(self.active_activity["ends_at"])
+        ):
+            self.active_activity = None
+        if (
+            self.active_activity
+            and (action in TIMED_CARE_ACTIONS or action in ("pet", "play"))
+        ):
+            remaining_seconds = float(self.active_activity["ends_at"]) - now
+            remaining = max(1, int((remaining_seconds + 59) // 60))
+            self.bubble.show(
+                f"正在{self.active_activity['label']}，还剩约 {remaining} 分钟～",
+                seconds=4.2,
+            )
+            self.needs_redraw = True
+            return
+
+        result = self.growth.perform(action, duration_minutes=duration_minutes)
+        self.bubble.show(result.message, seconds=5.0)
         self.physics.note_activity()
         if result.accepted:
             play_interaction(bool(self.settings.get("interaction_sound", False)))
             if result.level_up:
                 self.behavior.set_level(result.level_up)
-            self._start_sequence(result.animations)
+            if (
+                result.duration_minutes
+                and result.activity_label
+                and result.animations
+            ):
+                now = time.monotonic()
+                self.active_activity = {
+                    "action": action,
+                    "label": result.activity_label,
+                    "animation": result.animations[0],
+                    "ends_at": now + result.duration_minutes * 60,
+                }
+                self.action_queue.clear()
+                self._apply_behavior(
+                    self.behavior.play_external(result.animations[0], "activity", now)
+                )
+            else:
+                if action == "sleep":
+                    self.active_activity = None
+                self._start_sequence(result.animations)
             self.last_user_activity = time.monotonic()
         self.needs_redraw = True
+
+    def _launch_hud_tool(self, tool_id: str) -> None:
+        if tool_id == "control_panel":
+            self._open_control_panel()
+            message = "控制面板已打开"
+        else:
+            _ok, message = launch_builtin(tool_id)
+        self.bubble.show(message, seconds=3.5)
+        self.physics.note_activity()
+        self.last_user_activity = time.monotonic()
+        self.needs_redraw = True
+
+    def _activity_status_text(self, now: float | None = None) -> str | None:
+        activity = self.active_activity
+        if not activity:
+            return None
+        now = now if now is not None else time.monotonic()
+        remaining_seconds = max(0.0, float(activity["ends_at"]) - now)
+        remaining_minutes = max(1, int((remaining_seconds + 59) // 60))
+        return f"{activity['label']}·{remaining_minutes}分"
 
     def _panel_snapshot(self, message: str | None = None) -> dict[str, object]:
         current_settings = dict(self.settings)
@@ -791,6 +859,11 @@ class DeskPetApp:
                     hud_action = self.hud.action_at(event.pos)
                     if hud_action == "__menu__":
                         self.needs_redraw = True
+                    elif hud_action and hud_action.startswith("activity:"):
+                        _prefix, action, minutes = hud_action.split(":", 2)
+                        self._perform_care(action, int(minutes))
+                    elif hud_action and hud_action.startswith("tool:"):
+                        self._launch_hud_tool(hud_action.partition(":")[2])
                     elif hud_action:
                         self._perform_care(hud_action)
                     elif self._hit_character(event.pos):
@@ -868,7 +941,7 @@ class DeskPetApp:
                 if level_up:
                     self.behavior.set_level(level_up)
             timer_action = self._active_timer_action()
-            if self.current_mode not in ("drag", "falling", "sleep"):
+            if self.current_mode not in ("drag", "falling", "sleep", "activity"):
                 if timer_action:
                     self._start_sequence(("138", timer_action))
                 else:
@@ -877,7 +950,7 @@ class DeskPetApp:
             self.needs_redraw = True
 
         _snapshot, alerts = self.system_monitor.update(now)
-        if alerts and self.current_mode not in ("drag", "falling", "sleep"):
+        if alerts and self.current_mode not in ("drag", "falling", "sleep", "activity"):
             self.bubble.show("；".join(alerts), seconds=7.0)
             self._apply_behavior(self.behavior.play_external("091", "interaction"))
             self.needs_redraw = True
@@ -924,6 +997,7 @@ class DeskPetApp:
             self._stop_roaming(snap_to_edge=False)
             self.physics.begin_drag()
             self.action_queue.clear()
+            self.active_activity = None
             if self.growth.sleeping:
                 self.growth.perform("sleep")
             self._apply_behavior(self.behavior.begin_drag())
@@ -948,7 +1022,16 @@ class DeskPetApp:
 
         if not self.paused and self.window.is_visible:
             finished = self.current_clip.update(elapsed * self.animation_speed)
-            if self.current_mode == "sequence" and finished:
+            if self.current_mode == "activity":
+                activity = self.active_activity
+                if not activity or now >= float(activity["ends_at"]):
+                    label = str(activity["label"]) if activity else "活动"
+                    self.active_activity = None
+                    self._apply_behavior(self.behavior.return_to_base(now))
+                    self.bubble.show(f"{label}结束啦，辛苦了～", seconds=4.5)
+                elif finished:
+                    self.current_clip.reset()
+            elif self.current_mode == "sequence" and finished:
                 self._advance_sequence()
             elif self.current_mode == "need" and (
                 finished or self.current_clip.loop_completed
@@ -992,6 +1075,7 @@ class DeskPetApp:
             self.screen,
             self.growth,
             show_card=not self.bubble.visible(),
+            activity_text=self._activity_status_text(),
         )
         self.bubble.draw(self.screen, self.sprite_rect)
         pygame.display.flip()
