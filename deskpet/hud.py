@@ -68,6 +68,17 @@ class PetHud:
         self.open_menu: str | None = None
         self.pending_action: str | None = None
         self.pending_category: str | None = None
+        self.activity_active = False
+
+    def set_activity_active(self, active: bool) -> bool:
+        changed = self.activity_active != bool(active)
+        self.activity_active = bool(active)
+        if changed and not self.activity_active:
+            self.open_menu = None
+            self.pending_action = None
+            self.pending_category = None
+        return changed
+
 
     def _active_buttons(self) -> tuple[tuple[str, str, tuple[int, int, int]], ...]:
         back = (("menu_back", "‹ 返回", (232, 228, 226)),)
@@ -93,6 +104,10 @@ class PetHud:
                 (action, label, color) for action, label in CARE_OPTIONS[self.open_menu]
             )
             return back + options
+        if self.activity_active:
+            return (
+                ("stop_activity", "结束活动", (255, 210, 213)),
+            ) + self.MAIN_BUTTONS
         return self.MAIN_BUTTONS
 
     def _layout(

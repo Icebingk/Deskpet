@@ -366,6 +366,25 @@ class DeskPetApp:
             self.bubble.show("鼠标穿透设置失败")
         self.needs_redraw = True
 
+    def _resume_interrupted_state(self, now: float | None = None) -> bool:
+        """Restore a persistent activity after drag/fall has finished."""
+        now = now if now is not None else time.monotonic()
+        activity = self.active_activity
+        if activity and now < float(activity["ends_at"]):
+            self._apply_behavior(
+                self.behavior.play_external(str(activity["animation"]), "activity", now)
+            )
+            return True
+        if self.growth.sleeping:
+            self._apply_behavior(self.behavior.play_external("160", "sleep", now))
+            return True
+        timer_action = self._active_timer_action()
+        if timer_action:
+            self._apply_behavior(self.behavior.play_external(timer_action, "timer", now))
+            return True
+        return False
+
+
     def _handle_physics_event(self, event: PhysicsEvent, *, show_bubble: bool = True) -> None:
         if event.kind == "edge_hide":
             if self.current_mode == "base" and not self.growth.sleeping:
@@ -385,13 +404,7 @@ class DeskPetApp:
             return
         if event.kind == "landed":
             action = event.landing_action or "113"
-            activity = self.active_activity
-            if activity and time.monotonic() < float(activity["ends_at"]):
-                # 拖动只临时打断动作；落地后继续未结束的定时活动。
-                self._apply_behavior(
-                    self.behavior.play_external(str(activity["animation"]), "activity")
-                )
-            else:
+            if not self._resume_interrupted_state():
                 self._apply_behavior(self.behavior.end_drag(action))
             if show_bubble and event.drop_distance >= 30:
                 self.bubble.show(self.behavior.dialogue_for(action))
@@ -471,6 +484,19 @@ class DeskPetApp:
                 self._start_sequence(result.animations)
             self.last_user_activity = time.monotonic()
         self.needs_redraw = True
+
+    def _stop_active_activity(self) -> None:
+        activity = self.active_activity
+        if not activity:
+            self.bubble.show("当前没有进行中的活动")
+            return
+        label = str(activity["label"])
+        self.active_activity = None
+        self.action_queue.clear()
+        self._apply_behavior(self.behavior.return_to_base())
+        self.bubble.show(f"{label}已结束，休息一下吧～", seconds=3.5)
+        self.needs_redraw = True
+
 
     def _launch_hud_tool(self, tool_id: str) -> None:
         if tool_id == "control_panel":
@@ -981,6 +1007,8 @@ class DeskPetApp:
                     elif hud_action and hud_action.startswith("activity:"):
                         _prefix, action, minutes = hud_action.split(":", 2)
                         self._perform_care(action, int(minutes))
+                    elif hud_action == "stop_activity":
+                        self._stop_active_activity()
                     elif hud_action and hud_action.startswith("tool:"):
                         self._launch_hud_tool(hud_action.partition(":")[2])
                     elif hud_action:
@@ -1113,6 +1141,9 @@ class DeskPetApp:
             min(WINDOW_WIDTH, work_area.right - window_x),
         )
 
+        hud_activity_changed = self.hud.set_activity_active(
+            bool(self.active_activity and now < float(self.active_activity["ends_at"]))
+        )
         hud_changed = self.hud.update(
             pygame.mouse.get_pos(),
             self.sprite_rect,
@@ -1120,7 +1151,7 @@ class DeskPetApp:
             now=now,
             force_hide=self.window.dragging or self.window.click_through,
         )
-        if hud_changed:
+        if hud_changed or hud_activity_changed:
             self.needs_redraw = True
 
         if self.pending_single_click and now >= self.pending_single_click_due:
@@ -1139,8 +1170,6 @@ class DeskPetApp:
             self._stop_roaming(snap_to_edge=False)
             self.physics.begin_drag()
             self.action_queue.clear()
-            if self.growth.sleeping:
-                self.growth.perform("sleep")
             self._apply_behavior(self.behavior.begin_drag())
 
         roaming_this_tick = self.current_mode == "roam"

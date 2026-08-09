@@ -54,6 +54,15 @@ class HudEdgeLayoutTests(unittest.TestCase):
         self.hud._layout(self.character)
         self.assertIn("game_pet", self.hud.button_rects)
 
+    def test_active_activity_exposes_exit_button(self) -> None:
+        self.hud.set_activity_active(True)
+        self.hud.visible = True
+        self.hud._layout(self.character)
+        self.assertIn("stop_activity", self.hud.button_rects)
+        self.assertEqual(
+            self.hud.action_at(self.hud.button_rects["stop_activity"].center),
+            "stop_activity",
+        )
     def test_tool_menu_returns_builtin_tool_action(self) -> None:
         self.hud.visible = True
         self.hud.open_menu = "tool"
