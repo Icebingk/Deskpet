@@ -1150,7 +1150,9 @@ class DeskPetApp:
         if physics_event:
             self._handle_physics_event(physics_event)
 
-        if not (self.paused or self.fullscreen_quiet) and self.window.is_visible:
+        # “全屏静默”只抑制打扰行为，不能暂停 GIF 的逐帧更新；否则最大化窗口
+        # 被误判为全屏时，角色会停在某一帧，看起来像动画卡住。
+        if not self.paused and self.window.is_visible:
             finished = self.current_clip.update(elapsed * self.animation_speed)
             if self.exit_animation_pending:
                 if (
@@ -1215,6 +1217,11 @@ class DeskPetApp:
             self.growth,
             show_card=not self.bubble.visible(),
             activity_text=self._activity_status_text(),
+            weather_text=(
+                self.weather_summary
+                if bool(self.settings.get("weather_enabled", False))
+                else None
+            ),
         )
         self.bubble.draw(self.screen, self.sprite_rect)
         pygame.display.flip()

@@ -135,7 +135,7 @@ class PetHud:
 
         # Determine the button position first, then reserve that column for it.
         # The status card never covers a visible action button.
-        card_width, card_height = 174, 68
+        card_width, card_height = 174, 80
         card_min_left = visible_left + 8
         card_max_left = max(card_min_left, visible_right - card_width - 8)
         preferred_left = max(
@@ -261,6 +261,7 @@ class PetHud:
         screen: pygame.Surface,
         growth: PetGrowth,
         activity_text: str | None = None,
+        weather_text: str | None = None,
     ) -> None:
         shadow = self.card_rect.move(2, 3)
         pygame.draw.rect(screen, (211, 198, 202), shadow, border_radius=12)
@@ -318,6 +319,19 @@ class PetHud:
             xp_surface.get_rect(right=self.card_rect.right - 9, bottom=self.card_rect.bottom - 5),
         )
 
+        if weather_text:
+            summary = weather_text.strip()
+            if len(summary) > 10:
+                summary = summary[:10] + "…"
+            self._text(
+                screen,
+                self.small_font,
+                f"天气 {summary}",
+                (91, 112, 130),
+                left=self.card_rect.left + 9,
+                centery=self.card_rect.bottom - 9,
+            )
+
     def _draw_buttons(self, screen: pygame.Surface, growth: PetGrowth) -> None:
         for action, label, color in self._active_buttons():
             rect = self.button_rects[action]
@@ -345,9 +359,10 @@ class PetHud:
         *,
         show_card: bool = True,
         activity_text: str | None = None,
+        weather_text: str | None = None,
     ) -> None:
         if not self.visible:
             return
         if show_card:
-            self._draw_card(screen, growth, activity_text)
+            self._draw_card(screen, growth, activity_text, weather_text)
         self._draw_buttons(screen, growth)
