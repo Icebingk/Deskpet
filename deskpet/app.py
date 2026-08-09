@@ -385,7 +385,14 @@ class DeskPetApp:
             return
         if event.kind == "landed":
             action = event.landing_action or "113"
-            self._apply_behavior(self.behavior.end_drag(action))
+            activity = self.active_activity
+            if activity and time.monotonic() < float(activity["ends_at"]):
+                # 拖动只临时打断动作；落地后继续未结束的定时活动。
+                self._apply_behavior(
+                    self.behavior.play_external(str(activity["animation"]), "activity")
+                )
+            else:
+                self._apply_behavior(self.behavior.end_drag(action))
             if show_bubble and event.drop_distance >= 30:
                 self.bubble.show(self.behavior.dialogue_for(action))
             self._mark_settings_dirty()
@@ -1127,7 +1134,6 @@ class DeskPetApp:
             self._stop_roaming(snap_to_edge=False)
             self.physics.begin_drag()
             self.action_queue.clear()
-            self.active_activity = None
             if self.growth.sleeping:
                 self.growth.perform("sleep")
             self._apply_behavior(self.behavior.begin_drag())
