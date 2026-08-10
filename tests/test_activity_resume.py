@@ -47,6 +47,23 @@ class ActivityResumeTests(unittest.TestCase):
             "game_controller", 30, 180.0
         )
 
+    def test_neglect_trigger_plays_angry_action_and_lowers_mood(self) -> None:
+        app = self.make_app()
+        app.action_queue = ["004"]
+        app.growth.apply_neglect = Mock()
+        app.behavior.play_external = Mock(return_value="angry-change")
+        app.behavior.dialogue_for = Mock(return_value="我生气啦！")
+        app.bubble = SimpleNamespace(show=Mock())
+        app.needs_redraw = False
+
+        app._trigger_neglect(123.0)
+
+        self.assertEqual(app.last_neglect_at, 123.0)
+        self.assertEqual(app.action_queue, [])
+        app.growth.apply_neglect.assert_called_once_with()
+        app.behavior.play_external.assert_called_once_with("107", "neglected", 123.0)
+        app.bubble.show.assert_called_once_with("我生气啦！", seconds=5.0)
+        self.assertTrue(app.needs_redraw)
     def test_sleep_resumes_after_drag(self) -> None:
         app = self.make_app()
         app.growth.sleeping = True

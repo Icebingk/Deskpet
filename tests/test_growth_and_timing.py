@@ -42,6 +42,12 @@ class GrowthDecayTests(unittest.TestCase):
             growth._apply_elapsed(3600)
             self.assertAlmostEqual(growth.value("energy"), 64.0)
 
+    def test_neglect_lowers_mood_once(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            growth = self.make_growth(root)
+            loss = growth.apply_neglect()
+            self.assertAlmostEqual(loss, 4.0)
+            self.assertAlmostEqual(growth.value("mood"), 71.0)
     def test_food_restores_energy_and_exercise_uses_default_duration(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             growth = self.make_growth(root)
@@ -173,6 +179,18 @@ class GrowthSettingsTests(unittest.TestCase):
             self.assertEqual(loaded["passive_energy_decay_per_hour"], 0.4)
             self.assertEqual(loaded["exercise_energy_multiplier"], 1.5)
 class RandomActionTimingTests(unittest.TestCase):
+    def test_neglected_mode_returns_to_base_after_angry_gif(self) -> None:
+        behavior = BehaviorController(seed=1)
+        now = time.monotonic()
+        behavior._change("107", "neglected")
+        returned = behavior.update(
+            now=now,
+            loop_completed=False,
+            finished=True,
+            user_active=False,
+        )
+        self.assertIsNotNone(returned)
+        self.assertEqual(returned.mode, "base")
     def test_scene_duration_is_between_50_and_150_seconds(self) -> None:
         with patch.dict(os.environ, {"DESKPET_TIME_SCALE": "1"}):
             behavior = BehaviorController(seed=1)

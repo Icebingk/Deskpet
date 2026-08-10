@@ -179,7 +179,7 @@ class BehaviorController:
             self.base_variant_due = self._deadline(now, "base_variant")
             return self._change(self._choose_base(), "base")
 
-        if self.mode in ("interaction", "landing", "need") and finished:
+        if self.mode in ("interaction", "landing", "need", "neglected") and finished:
             self.base_variant_due = self._deadline(now, "base_variant")
             return self._change(self._choose_base(), "base")
 

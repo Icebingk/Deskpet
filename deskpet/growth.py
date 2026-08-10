@@ -349,6 +349,16 @@ class PetGrowth:
         self.save()
         return level_up
 
+    def apply_neglect(self, mood_loss: float = 4.0) -> float:
+        """被长时间冷落时只扣一次少量心情，避免重复叠加。"""
+        loss = max(0.0, min(20.0, float(mood_loss)))
+        before = self.value("mood")
+        self._add(mood=-loss)
+        actual_loss = before - self.value("mood")
+        self.dirty = True
+        self.save()
+        return actual_loss
+
     def cooldown_remaining(self, action: str, now: float | None = None) -> float:
         now = now if now is not None else time.time()
         normalized = CARE_ACTION_ALIASES.get(action, action)

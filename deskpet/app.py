@@ -72,6 +72,9 @@ from .window_win32 import GlobalHotkeys, Win32Window
 
 
 class DeskPetApp:
+    NEGLECT_AFTER_SECONDS = 45 * 60
+    NEGLECT_REPEAT_SECONDS = 3 * 60 * 60
+
     HEALTH_MESSAGES = (
         "坐久啦，起来伸个懒腰吧～",
         "喝口水，顺便休息一下眼睛吧！",
@@ -178,6 +181,7 @@ class DeskPetApp:
         self.pending_single_click = False
         self.pending_single_click_due = 0.0
         self.last_user_activity = time.monotonic()
+        self.last_neglect_at = self.last_user_activity - self.NEGLECT_REPEAT_SECONDS
         self.growth_tick_seconds = int(self.settings["growth_tick_minutes"]) * 60
         self.next_growth_tick = time.monotonic() + self.growth_tick_seconds
         self.growth_save_due = time.monotonic() + 60
@@ -487,6 +491,7 @@ class DeskPetApp:
                     self.active_activity = None
                 self._start_sequence(result.animations)
             self.last_user_activity = time.monotonic()
+            self.last_neglect_at = self.last_user_activity - self.NEGLECT_REPEAT_SECONDS
         self.needs_redraw = True
 
     def _settle_active_activity(self, now: float) -> CareResult | None:
@@ -524,6 +529,7 @@ class DeskPetApp:
         self.bubble.show(message, seconds=3.5)
         self.physics.note_activity()
         self.last_user_activity = time.monotonic()
+        self.last_neglect_at = self.last_user_activity - self.NEGLECT_REPEAT_SECONDS
         self.needs_redraw = True
 
     def _activity_status_text(self, now: float | None = None) -> str | None:
@@ -582,6 +588,7 @@ class DeskPetApp:
     def _open_control_panel(self) -> None:
         self.control_panel.open(self._panel_snapshot())
         self.last_user_activity = time.monotonic()
+        self.last_neglect_at = self.last_user_activity - self.NEGLECT_REPEAT_SECONDS
 
     @staticmethod
     def _integer(value: object, minimum: int, maximum: int, label: str) -> int:
@@ -958,6 +965,7 @@ class DeskPetApp:
             bool(self.settings.get("autostart", False)),
         )
         self.last_user_activity = time.monotonic()
+        self.last_neglect_at = self.last_user_activity - self.NEGLECT_REPEAT_SECONDS
         if command == MENU_CONTROL_PANEL:
             self._open_control_panel()
         elif command == MENU_SHRINK:
@@ -1016,6 +1024,7 @@ class DeskPetApp:
                 self.running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.last_user_activity = time.monotonic()
+                self.last_neglect_at = self.last_user_activity - self.NEGLECT_REPEAT_SECONDS
                 self.physics.note_activity()
                 if event.button == 1:
                     hud_action = self.hud.action_at(event.pos)
@@ -1083,6 +1092,26 @@ class DeskPetApp:
                 self.next_need_check = now + 30 * 60
             else:
                 self.next_need_check = now + random.uniform(5 * 60, 9 * 60)
+
+        if (
+            not self.paused
+            and self.window.is_visible
+            and not self.growth.sleeping
+            and not self.active_activity
+            and self.current_mode == "base"
+            and now - self.last_user_activity >= self.NEGLECT_AFTER_SECONDS
+            and now - self.last_neglect_at >= self.NEGLECT_REPEAT_SECONDS
+        ):
+            self._trigger_neglect(now)
+
+    def _trigger_neglect(self, now: float) -> None:
+        """在长时间未被理会时播放一次生气反馈。"""
+        self.last_neglect_at = now
+        self.action_queue.clear()
+        self.growth.apply_neglect()
+        self._apply_behavior(self.behavior.play_external("107", "neglected", now))
+        self.bubble.show(self.behavior.dialogue_for("107"), seconds=5.0)
+        self.needs_redraw = True
 
     def _active_timer_action(self) -> str | None:
         for timer in self.database.active_timers():
