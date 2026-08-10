@@ -357,6 +357,11 @@ class ControlPanelBridge:
                 city=weather_city.get(),
             )
 
+        def refresh_weather_from_panel() -> None:
+            if weather_city.get().strip():
+                weather_enabled.set(True)
+            apply_weather_from_panel()
+
         ttk.Checkbutton(
             environment_options,
             text="启用天气",
@@ -371,14 +376,15 @@ class ControlPanelBridge:
         weather_city_entry.grid(row=0, column=1, padx=6)
         weather_city_entry.bind(
             "<Return>",
-            lambda _event: (apply_weather_from_panel(), "break")[1],
+            lambda _event: (refresh_weather_from_panel(), "break")[1],
         )
         ttk.Button(
             environment_options,
-            text="刷新天气",
-            command=apply_weather_from_panel,
+            text="保存并刷新",
+            command=refresh_weather_from_panel,
         ).grid(row=0, column=2, padx=4)
         ttk.Label(environment_options, textvariable=weather_text, style="Sub.TLabel").grid(row=0, column=3, sticky="w")
+        ttk.Label(environment_options, text="输入城市后按回车或“保存并刷新”即可启用", style="Sub.TLabel").grid(row=1, column=3, sticky="w", pady=(8, 0))
         ttk.Label(environment_options, text="全屏时").grid(row=1, column=0, sticky="w", pady=(8, 0))
         ttk.Combobox(environment_options, textvariable=fullscreen_policy, values=("hide", "quiet", "ignore"), state="readonly", width=12).grid(row=1, column=1, sticky="w", pady=(8, 0))
         ttk.Label(environment_options, text="hide=隐藏，quiet=安静，ignore=忽略", style="Sub.TLabel").grid(row=1, column=2, sticky="w", pady=(8, 0))
