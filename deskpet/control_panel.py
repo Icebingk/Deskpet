@@ -349,9 +349,35 @@ class ControlPanelBridge:
         ttk.Button(data_options, text="备份全部数据", command=lambda: send("backup_data", destination=filedialog.asksaveasfilename(defaultextension=".zip", filetypes=(("桌宠备份", "*.zip"),)))).pack(side="left", padx=4)
         ttk.Button(data_options, text="恢复备份", command=lambda: send("restore_data", source=filedialog.askopenfilename(filetypes=(("桌宠备份", "*.zip"),)))).pack(side="left", padx=4)
         weather_text = tk.StringVar(value="天气未启用")
-        ttk.Checkbutton(environment_options, text="启用天气", variable=weather_enabled, command=lambda: send("apply_weather", enabled=weather_enabled.get(), city=weather_city.get())).grid(row=0, column=0, sticky="w")
-        ttk.Entry(environment_options, textvariable=weather_city, width=16).grid(row=0, column=1, padx=6)
-        ttk.Button(environment_options, text="刷新天气", command=lambda: send("apply_weather", enabled=weather_enabled.get(), city=weather_city.get())).grid(row=0, column=2, padx=4)
+
+        def apply_weather_from_panel() -> None:
+            send(
+                "apply_weather",
+                enabled=weather_enabled.get(),
+                city=weather_city.get(),
+            )
+
+        ttk.Checkbutton(
+            environment_options,
+            text="启用天气",
+            variable=weather_enabled,
+            command=apply_weather_from_panel,
+        ).grid(row=0, column=0, sticky="w")
+        weather_city_entry = ttk.Entry(
+            environment_options,
+            textvariable=weather_city,
+            width=16,
+        )
+        weather_city_entry.grid(row=0, column=1, padx=6)
+        weather_city_entry.bind(
+            "<Return>",
+            lambda _event: (apply_weather_from_panel(), "break")[1],
+        )
+        ttk.Button(
+            environment_options,
+            text="刷新天气",
+            command=apply_weather_from_panel,
+        ).grid(row=0, column=2, padx=4)
         ttk.Label(environment_options, textvariable=weather_text, style="Sub.TLabel").grid(row=0, column=3, sticky="w")
         ttk.Label(environment_options, text="全屏时").grid(row=1, column=0, sticky="w", pady=(8, 0))
         ttk.Combobox(environment_options, textvariable=fullscreen_policy, values=("hide", "quiet", "ignore"), state="readonly", width=12).grid(row=1, column=1, sticky="w", pady=(8, 0))
@@ -449,7 +475,8 @@ class ControlPanelBridge:
                 ai_base_url.set(str(settings.get("ai_base_url", "")))
                 ai_model.set(str(settings.get("ai_model", "")))
                 weather_enabled.set(bool(settings.get("weather_enabled", False)))
-                weather_city.set(str(settings.get("weather_city", "")))
+                if root.focus_get() is not weather_city_entry:
+                    weather_city.set(str(settings.get("weather_city", "")))
                 fullscreen_policy.set(str(settings.get("fullscreen_policy", "quiet")))
                 custom_values = [
                     f"{item.get('name', '')}｜{item.get('target', '')}"
