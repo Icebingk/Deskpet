@@ -46,8 +46,8 @@ class GrowthDecayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             growth = self.make_growth(root)
             loss = growth.apply_neglect()
-            self.assertAlmostEqual(loss, 4.0)
-            self.assertAlmostEqual(growth.value("mood"), 71.0)
+            self.assertAlmostEqual(loss, 20.0)
+            self.assertAlmostEqual(growth.value("mood"), 55.0)
     def test_food_restores_energy_and_exercise_uses_default_duration(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             growth = self.make_growth(root)

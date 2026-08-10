@@ -49,6 +49,7 @@ class ActivityResumeTests(unittest.TestCase):
 
     def test_neglect_trigger_plays_angry_action_and_lowers_mood(self) -> None:
         app = self.make_app()
+        app.last_user_activity = 123.0 - 45 * 60
         app.action_queue = ["004"]
         app.growth.apply_neglect = Mock()
         app.behavior.play_external = Mock(return_value="angry-change")
@@ -60,10 +61,14 @@ class ActivityResumeTests(unittest.TestCase):
 
         self.assertEqual(app.last_neglect_at, 123.0)
         self.assertEqual(app.action_queue, [])
-        app.growth.apply_neglect.assert_called_once_with()
+        app.growth.apply_neglect.assert_called_once_with(8.0)
         app.behavior.play_external.assert_called_once_with("107", "neglected", 123.0)
         app.bubble.show.assert_called_once_with("我生气啦！", seconds=5.0)
         self.assertTrue(app.needs_redraw)
+    def test_neglect_stage_increases_with_idle_duration(self) -> None:
+        self.assertEqual(DeskPetApp._neglect_stage(45 * 60), ("107", 8.0))
+        self.assertEqual(DeskPetApp._neglect_stage(90 * 60), ("110", 14.0))
+        self.assertEqual(DeskPetApp._neglect_stage(3 * 60 * 60), ("003", 20.0))
     def test_sleep_resumes_after_drag(self) -> None:
         app = self.make_app()
         app.growth.sleeping = True

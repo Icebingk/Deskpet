@@ -74,6 +74,11 @@ from .window_win32 import GlobalHotkeys, Win32Window
 class DeskPetApp:
     NEGLECT_AFTER_SECONDS = 45 * 60
     NEGLECT_REPEAT_SECONDS = 3 * 60 * 60
+    NEGLECT_STAGES = (
+        (3 * 60 * 60, "003", 20.0),
+        (90 * 60, "110", 14.0),
+        (45 * 60, "107", 8.0),
+    )
 
     HEALTH_MESSAGES = (
         "坐久啦，起来伸个懒腰吧～",
@@ -1104,13 +1109,21 @@ class DeskPetApp:
         ):
             self._trigger_neglect(now)
 
+    @classmethod
+    def _neglect_stage(cls, idle_seconds: float) -> tuple[str, float]:
+        for threshold, action, mood_loss in cls.NEGLECT_STAGES:
+            if idle_seconds >= threshold:
+                return action, mood_loss
+        return "107", 8.0
+
     def _trigger_neglect(self, now: float) -> None:
-        """在长时间未被理会时播放一次生气反馈。"""
+        """按冷落时长播放对应的生气反馈并扣除一次心情。"""
+        action, mood_loss = self._neglect_stage(now - self.last_user_activity)
         self.last_neglect_at = now
         self.action_queue.clear()
-        self.growth.apply_neglect()
-        self._apply_behavior(self.behavior.play_external("107", "neglected", now))
-        self.bubble.show(self.behavior.dialogue_for("107"), seconds=5.0)
+        self.growth.apply_neglect(mood_loss)
+        self._apply_behavior(self.behavior.play_external(action, "neglected", now))
+        self.bubble.show(self.behavior.dialogue_for(action), seconds=5.0)
         self.needs_redraw = True
 
     def _active_timer_action(self) -> str | None:
