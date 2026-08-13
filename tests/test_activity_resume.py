@@ -20,6 +20,23 @@ class ActivityResumeTests(unittest.TestCase):
         app._active_timer_action = Mock(return_value=None)
         return app
 
+    def test_one_shot_care_actions_are_repeated_before_returning_to_base(self) -> None:
+        app = self.make_app()
+        app.growth.sleeping = False
+        app.action_queue = []
+        app._start_sequence(("088", "147"))
+
+        self.assertEqual(app.action_queue, ["088", "147", "147"])
+        self.assertEqual(app.behavior.play_external.call_args.args[:2], ("088", "sequence"))
+
+    def test_sleep_entry_and_sleep_loop_are_not_duplicated(self) -> None:
+        app = self.make_app()
+        app.growth.sleeping = True
+        app.action_queue = []
+        app._start_sequence(("199", "160"))
+
+        self.assertEqual(app.action_queue, ["199", "160"])
+        self.assertEqual(app.behavior.play_external.call_args.args[:2], ("199", "sequence"))
     def test_timed_activity_resumes_before_other_persistent_states(self) -> None:
         app = self.make_app()
         now = time.monotonic()

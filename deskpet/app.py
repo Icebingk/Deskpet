@@ -293,14 +293,19 @@ class DeskPetApp:
     def _start_sequence(self, actions: tuple[str, ...]) -> None:
         if not actions:
             return
-        self.action_queue = list(actions[1:])
-        if actions[0] == "160" and self.growth.sleeping:
+        repeated_actions: list[str] = []
+        persistent_actions = {"094", "148", "160"}
+        for action in actions:
+            repeats = 1 if action in persistent_actions else 2
+            repeated_actions.extend([action] * repeats)
+        self.action_queue = repeated_actions[1:]
+        if repeated_actions[0] == "160" and self.growth.sleeping:
             first_mode = "sleep"
-        elif actions[0] in ("094", "148"):
+        elif repeated_actions[0] in ("094", "148"):
             first_mode = "timer"
         else:
             first_mode = "sequence"
-        self._apply_behavior(self.behavior.play_external(actions[0], first_mode))
+        self._apply_behavior(self.behavior.play_external(repeated_actions[0], first_mode, time.monotonic()))
 
     def _advance_sequence(self) -> None:
         if self.action_queue:
@@ -311,7 +316,7 @@ class DeskPetApp:
                 mode = "timer"
             else:
                 mode = "sequence"
-            self._apply_behavior(self.behavior.play_external(action, mode))
+            self._apply_behavior(self.behavior.play_external(action, mode, time.monotonic()))
         else:
             activity = self.active_activity
             if activity and time.monotonic() < float(activity["ends_at"]):

@@ -66,6 +66,7 @@ class BehaviorController:
         self.scene_ends_at = 0.0
         self.subtle_cycles = max(1, int(self.timing.get("subtle_cycles", 1)))
         self.subtle_cycles_remaining = 0
+        self.transient_cycles_remaining = 0
         now = time.monotonic()
         self.last_special_at = now - self._seconds(float(self.timing["special_cooldown"]))
         self.quiet_until = 0.0
@@ -114,6 +115,7 @@ class BehaviorController:
 
     def trigger_interaction(self, now: float | None = None) -> BehaviorChange:
         now = now if now is not None else time.monotonic()
+        self.transient_cycles_remaining = 1
         self.quiet_until = now + self._seconds(float(self.timing["post_interaction_quiet"]))
         self.subtle_due = self._deadline(self.quiet_until, "subtle_idle")
         self.scene_due = self._deadline(self.quiet_until, "scene_idle")
@@ -136,6 +138,7 @@ class BehaviorController:
     ) -> BehaviorChange:
         """播放照顾、需求、睡眠等由外部系统触发的动作。"""
         now = now if now is not None else time.monotonic()
+        self.transient_cycles_remaining = 1 if mode in ("interaction", "need", "neglected") else 0
         self.quiet_until = now + self._seconds(float(self.timing["post_interaction_quiet"]))
         self.subtle_due = self._deadline(self.quiet_until, "subtle_idle")
         self.scene_due = self._deadline(self.quiet_until, "scene_idle")
@@ -179,7 +182,14 @@ class BehaviorController:
             self.base_variant_due = self._deadline(now, "base_variant")
             return self._change(self._choose_base(), "base")
 
-        if self.mode in ("interaction", "landing", "need", "neglected") and finished:
+        if self.mode in ("interaction", "need", "neglected") and finished:
+            if self.transient_cycles_remaining > 0:
+                self.transient_cycles_remaining -= 1
+                return self._change(self.current_action, self.mode)
+            self.base_variant_due = self._deadline(now, "base_variant")
+            return self._change(self._choose_base(), "base")
+
+        if self.mode == "landing" and finished:
             self.base_variant_due = self._deadline(now, "base_variant")
             return self._change(self._choose_base(), "base")
 
