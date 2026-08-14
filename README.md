@@ -9,10 +9,11 @@
 ## 项目结构
 
 - `deskpet\`：桌宠主程序源码。
-- `pet_assets\`：程序实际使用的精选 GIF。
-- `素材\`：完整原始素材，只作归档和选图。
-- `catalog\`：GIF 标签、检索目录和标签修正数据。
+- `assets\runtime\`：程序实际使用的精选 GIF。
+- `assets\source\`：完整原始素材，只作归档和选图。
+- `assets\catalog\`：GIF 标签、检索目录和标签修正数据。
 - `docs\`：需求规范与完整版设计文档。
+- `docs\presentations\`：项目介绍 PPT 与 PDF。
 - `tests\`：自动化测试。
 - `tools\`：PyInstaller 打包辅助文件。
 - `dist\`：可直接运行的正式版 EXE。
@@ -75,9 +76,9 @@ python deskpet2d.py
 
 ## GIF 动作素材目录
 
-- 双击 `catalog\gif_action_catalog.html`：搜索、筛选并直接播放全部 GIF。
-- `catalog\gif_action_catalog.csv`：使用 Excel 查看全部动作标签和技术信息。
-- `catalog\gif_action_catalog.json`：供程序设计和自动动作选择使用。
+- 双击 `assets\catalog\gif_action_catalog.html`：搜索、筛选并直接播放全部 GIF。
+- `assets\catalog\gif_action_catalog.csv`：使用 Excel 查看全部动作标签和技术信息。
+- `assets\catalog\gif_action_catalog.json`：供程序设计和自动动作选择使用。
 
 全部 202 个 GIF 均已标注；原素材没有被重命名或修改。
 

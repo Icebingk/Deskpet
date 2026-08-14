@@ -1,0 +1,200 @@
+{
+  "002": {
+    "action_name": "坐转椅写笔记",
+    "category": "工作学习",
+    "character": "白色小狗",
+    "recommended_use": "工作待机",
+    "priority": "高",
+    "keywords": "转椅|写字|笔记|办公",
+    "description": "白色小狗坐在绿色转椅上低头写笔记"
+  },
+  "004": {
+    "action_name": "反复跳跃",
+    "category": "运动健身",
+    "character": "白色小狗",
+    "recommended_use": "点击互动",
+    "priority": "高",
+    "keywords": "跳跃|压缩|弹起",
+    "description": "白色小狗反复压低身体再向上跳起"
+  },
+  "010": {
+    "action_name": "黄狗欺负白狗",
+    "category": "双宠互动",
+    "character": "白色加黄色双宠",
+    "recommended_use": "伙伴互动",
+    "priority": "中",
+    "keywords": "欺负|捉弄|双宠",
+    "description": "黄色小狗反复欺负身边的白色小狗"
+  },
+  "017": {
+    "action_name": "白狗刷牙",
+    "category": "日常生活",
+    "character": "白色小狗",
+    "recommended_use": "清洁互动",
+    "priority": "高",
+    "keywords": "刷牙|牙刷|清洁",
+    "description": "白色小狗拿着牙刷反复刷牙"
+  },
+  "035": {
+    "action_name": "泪流满地",
+    "category": "负面情绪",
+    "character": "白色小狗",
+    "recommended_use": "低心情状态",
+    "priority": "高",
+    "keywords": "哭泣|眼泪|泪流满地",
+    "description": "白色小狗哭倒在大片蓝色泪水中"
+  },
+  "037": {
+    "action_name": "出现啦",
+    "category": "互动反馈",
+    "character": "白色小狗",
+    "recommended_use": "出现或叫醒",
+    "priority": "高",
+    "keywords": "出现|探头|举手",
+    "description": "白色小狗从不同颜色的遮挡后探头出现"
+  },
+  "046": {
+    "action_name": "贴地翻滚",
+    "category": "移动出行",
+    "character": "白色小狗",
+    "recommended_use": "随机横向巡游",
+    "priority": "高",
+    "keywords": "贴地|翻滚|左右移动",
+    "description": "白色小狗贴着地面反复翻滚"
+  },
+  "097": {
+    "action_name": "贴地翻滚",
+    "category": "移动出行",
+    "character": "白色小狗",
+    "recommended_use": "随机横向巡游",
+    "priority": "高",
+    "keywords": "蜷缩|贴地|翻滚|左右移动",
+    "description": "白色小狗蜷缩身体贴地翻滚"
+  },
+  "101": {
+    "action_name": "滚出来了",
+    "category": "互动反馈",
+    "character": "白色小狗",
+    "recommended_use": "轻微待机",
+    "priority": "高",
+    "keywords": "滚动|出现|起身",
+    "description": "白色小狗缩成一团滚动后重新站起来"
+  },
+  "103": {
+    "action_name": "白狗墙后探头",
+    "category": "待机动作",
+    "character": "白色小狗",
+    "recommended_use": "屏幕边缘探头",
+    "priority": "高",
+    "keywords": "墙壁|探头|屏幕边缘|镜像",
+    "description": "白色小狗从灰色墙后探头；右边缘用原图，左边缘水平镜像"
+  },
+  "107": {
+    "action_name": "生气狂吠",
+    "category": "负面情绪",
+    "character": "白色小狗",
+    "recommended_use": "生气反馈",
+    "priority": "高",
+    "keywords": "生气|狂吠|愤怒",
+    "description": "白色小狗趴地后抬头生气狂吠"
+  },
+  "109": {
+    "action_name": "反复翻滚",
+    "category": "移动出行",
+    "character": "白色小狗",
+    "recommended_use": "拖拽下落",
+    "priority": "高",
+    "keywords": "翻滚|旋转|拖拽",
+    "description": "白色小狗在空中反复翻滚旋转"
+  },
+  "110": {
+    "action_name": "扯床单",
+    "category": "日常生活",
+    "character": "白色小狗",
+    "recommended_use": "场景待机",
+    "priority": "高",
+    "keywords": "床单|拉扯|布料",
+    "description": "白色小狗反复拉扯蓝色床单"
+  },
+  "114": {
+    "action_name": "风中凌乱",
+    "category": "环境状态",
+    "character": "白色小狗",
+    "recommended_use": "大风天气",
+    "priority": "高",
+    "keywords": "大风|凌乱|吹动",
+    "description": "白色小狗被强风吹得浑身凌乱"
+  },
+  "115": {
+    "action_name": "电脑办公",
+    "category": "工作学习",
+    "character": "白色小狗",
+    "recommended_use": "工作状态",
+    "priority": "高",
+    "keywords": "电脑|办公|工作",
+    "description": "白色小狗趴在电脑前认真办公"
+  },
+  "131": {
+    "action_name": "流鼻涕",
+    "category": "健康状态",
+    "character": "白色小狗",
+    "recommended_use": "生病状态",
+    "priority": "高",
+    "keywords": "流鼻涕|感冒|生病",
+    "description": "白色小狗坐着不断流鼻涕"
+  },
+  "148": {
+    "action_name": "上班中",
+    "category": "工作学习",
+    "character": "白色小狗",
+    "recommended_use": "工作状态",
+    "priority": "高",
+    "keywords": "上班|电脑|办公",
+    "description": "白色小狗坐在电脑前持续上班"
+  },
+  "149": {
+    "action_name": "玩手柄游戏",
+    "category": "日常生活",
+    "character": "白色小狗",
+    "recommended_use": "休闲待机",
+    "priority": "高",
+    "keywords": "手柄|游戏|沙发",
+    "description": "白色小狗坐在黄色沙发上玩手柄游戏"
+  },
+  "164": {
+    "action_name": "一起说相声",
+    "category": "双宠互动",
+    "character": "白色加黄色双宠",
+    "recommended_use": "伙伴互动",
+    "priority": "中",
+    "keywords": "相声|舞台|双宠",
+    "description": "两只小狗穿着蓝色服装站在一起说相声"
+  },
+  "169": {
+    "action_name": "黄狗扮鬼",
+    "category": "装扮特效",
+    "character": "黄色垂耳狗",
+    "recommended_use": "节日装扮",
+    "priority": "低",
+    "keywords": "扮鬼|幽灵|装扮",
+    "description": "黄色小狗套着白色幽灵装扮晃动"
+  },
+  "170": {
+    "action_name": "白狗扮鬼",
+    "category": "装扮特效",
+    "character": "白色小狗",
+    "recommended_use": "节日装扮",
+    "priority": "中",
+    "keywords": "扮鬼|幽灵|装扮",
+    "description": "白色小狗套着白色幽灵装扮晃动"
+  },
+  "182": {
+    "action_name": "骑马",
+    "category": "移动出行",
+    "character": "白色小狗",
+    "recommended_use": "随机横向巡游",
+    "priority": "高",
+    "keywords": "骑马|奔跑|移动",
+    "description": "白色小狗骑着彩色小马向前移动"
+  }
+}

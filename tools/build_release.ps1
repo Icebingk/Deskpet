@@ -37,7 +37,7 @@ try {
         '--name', '线条小狗桌宠',
         '--runtime-hook', (Join-Path $projectRoot 'tools\pyinstaller_tk_runtime.py'),
         '--add-data', ((Join-Path $projectRoot 'action_manifest.json') + ';.'),
-        '--add-data', ((Join-Path $projectRoot 'pet_assets') + ';pet_assets'),
+        '--add-data', ((Join-Path $projectRoot 'assets\runtime') + ';assets\runtime'),
         '--add-data', ($tclLibrary + ';tcl_runtime\tcl8.6'),
         '--add-data', ($tkLibrary + ';tcl_runtime\tk8.6'),
         '--exclude-module', 'pkg_resources', '--exclude-module', 'setuptools',

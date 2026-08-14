@@ -179,6 +179,29 @@ class GrowthSettingsTests(unittest.TestCase):
             self.assertEqual(loaded["passive_energy_decay_per_hour"], 0.4)
             self.assertEqual(loaded["exercise_energy_multiplier"], 1.5)
 class RandomActionTimingTests(unittest.TestCase):
+    def test_interaction_plays_two_complete_cycles_before_returning_to_base(self) -> None:
+        behavior = BehaviorController(seed=1)
+        now = time.monotonic()
+        first = behavior.trigger_interaction(now)
+
+        replay = behavior.update(
+            now=now + 1.0,
+            loop_completed=False,
+            finished=True,
+            user_active=False,
+        )
+        self.assertIsNotNone(replay)
+        self.assertEqual(replay.mode, "interaction")
+        self.assertEqual(replay.action, first.action)
+
+        returned = behavior.update(
+            now=now + 2.0,
+            loop_completed=False,
+            finished=True,
+            user_active=False,
+        )
+        self.assertIsNotNone(returned)
+        self.assertEqual(returned.mode, "base")
     def test_neglected_mode_returns_to_base_after_angry_gif(self) -> None:
         behavior = BehaviorController(seed=1)
         now = time.monotonic()

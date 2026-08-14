@@ -1,6 +1,6 @@
 # 线条小狗桌宠完整版功能设计
 
-> 设计依据：`desktop_pet_design_spec.md`、`..\catalog\gif_action_catalog.csv`、`..\catalog\gif_action_catalog.json`。  
+> 设计依据：`desktop_pet_design_spec.md`、`..\assets\catalog\gif_action_catalog.csv`、`..\assets\catalog\gif_action_catalog.json`。
 > 目标平台：Windows 10 / Windows 11。  
 > 表现形式：2D 透明 GIF，不使用 3D 模型。
 
@@ -31,12 +31,12 @@
 
 ### 2.2 动作资源包结构
 
-程序不根据文件名猜测动作，而是读取 `..\catalog\gif_action_catalog.json` 中的标签。运行时再生成根目录中的 `..\action_manifest.json`，记录状态名、GIF 编号、循环方式、冷却时间和解锁条件。
+程序不根据文件名猜测动作，而是读取 `..\assets\catalog\gif_action_catalog.json` 中的标签。运行时再生成根目录中的 `..\action_manifest.json`，记录状态名、GIF 编号、循环方式、冷却时间和解锁条件。
 
 建议资源包结构：
 
 ```text
-pet_assets/
+assets/runtime/
 ├─ white/          # 默认白色小狗
 ├─ yellow_floppy/  # 黄色垂耳皮肤
 ├─ yellow_upright/ # 黄色立耳皮肤
