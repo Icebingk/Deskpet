@@ -128,8 +128,8 @@
 
 原始动态素材目录实际包含 202 个 GIF，其中 200 个为编号动作，2 个为素材宣传图。所有文件已经逐帧检查并建立标签，原始 GIF 不改名、不覆盖。
 
-* `..\catalog\gif_action_catalog.html`：可搜索、筛选并直接播放 GIF 的本地设计目录。
-* `..\catalog\gif_action_catalog.csv`：可用 Excel 打开，适合排序、筛选和动作选型。
-* `..\catalog\gif_action_catalog.json`：供桌宠程序按状态、角色和用途自动读取动作。
+* `..\assets\catalog\gif_action_catalog.html`：可搜索、筛选并直接播放 GIF 的本地设计目录。
+* `..\assets\catalog\gif_action_catalog.csv`：可用 Excel 打开，适合排序、筛选和动作选型。
+* `..\assets\catalog\gif_action_catalog.json`：供桌宠程序按状态、角色和用途自动读取动作。
 * 标签字段包括动作名称、分类、角色外观、推荐用途、优先级、关键词、动作说明、帧数、循环时长、画布尺寸、透明背景和文件校验值。
 * 两张宣传 GIF 的优先级标记为“排除”，不得作为桌宠动作载入。

@@ -22,3 +22,7 @@ Thumbs.db
 Desktop.ini
 *.tmp
 *.log
+
+# Local generated and inspection files
+tmp/
+*.inspect.ndjson
